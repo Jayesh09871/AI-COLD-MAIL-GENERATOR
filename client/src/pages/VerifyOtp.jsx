@@ -104,9 +104,9 @@ const VerifyOtp = () => {
                     <div className="mt-10 pt-8 border-t border-gray-100 text-center">
                         <p className="text-sm text-gray-600">
                             Didn't receive the code?{' '}
-                            <button className="font-bold text-primary-600 hover:text-primary-500 transition-colors">
+                            {/* <button className="font-bold text-primary-600 hover:text-primary-500 transition-colors">
                                 Resend OTP
-                            </button>
+                            </button> */}
                         </p>
                     </div>
                 </div>
