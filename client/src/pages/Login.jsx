@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
-import api from '../utils/api';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../utils/api';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -27,54 +27,109 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
+        <div className="min-h-screen flex bg-white font-sans">
+            {/* Left Side: Illustration/Gradient */}
+            <div className="hidden lg:flex lg:w-1/2 bg-gray-900 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary-600 to-indigo-900 opacity-90"></div>
+                <div className="relative z-10 w-full flex flex-col justify-center px-20">
+                    <div className="mb-12">
+                        <span className="text-3xl font-black text-white tracking-tight">SmartReach AI</span>
+                    </div>
+                    <h1 className="text-5xl font-extrabold text-white leading-tight mb-6">
+                        Unlock the power of <br />
+                        <span className="text-primary-400">AI Outreach.</span>
+                    </h1>
+                    <p className="text-xl text-primary-100/80 leading-relaxed max-w-lg">
+                        Join 5,000+ sales teams generating high-converting sequences in seconds.
+                    </p>
+                    
+                    <div className="mt-12 space-y-6">
+                        {[
+                            'Generate email, follow-up & LinkedIn DM',
+                            'Personalized at scale with one click',
+                            'Optimized for maximum reply rates'
+                        ].map((feature, i) => (
+                            <div key={i} className="flex items-center text-white/90">
+                                <div className="h-6 w-6 rounded-full bg-primary-500/20 border border-primary-500/30 flex items-center justify-center mr-4">
+                                    <svg className="h-3.5 w-3.5 text-primary-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <span className="font-medium">{feature}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                {/* Decorative circles */}
+                <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
             </div>
 
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow-sm border border-gray-100 sm:rounded-xl sm:px-10">
+            {/* Right Side: Form */}
+            <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-20 py-12 bg-gray-50/30">
+                <div className="max-w-md w-full mx-auto">
+                    <div className="lg:hidden mb-8">
+                        <span className="text-2xl font-black bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-transparent">
+                            SmartReach AI
+                        </span>
+                    </div>
+
+                    <div className="mb-10">
+                        <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Welcome back</h2>
+                        <p className="mt-3 text-gray-600">Enter your credentials to access your account</p>
+                    </div>
+
                     <form className="space-y-6" onSubmit={handleSubmit}>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Email address</label>
-                            <div className="mt-1">
-                                <input
-                                    type="email"
-                                    required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                                />
-                            </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-gray-700 tracking-wide">Email Address</label>
+                            <input
+                                type="email"
+                                required
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="name@company.com"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all outline-none"
+                            />
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Password</label>
-                            <div className="mt-1">
-                                <input
-                                    type="password"
-                                    required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                                />
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-semibold text-gray-700 tracking-wide">Password</label>
+                                {/* <a href="#" className="text-xs font-semibold text-primary-600 hover:text-primary-500 transition-colors">Forgot password?</a> */}
                             </div>
+                            <input
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all outline-none"
+                            />
                         </div>
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                            className="w-full py-4 px-6 rounded-xl bg-gray-900 text-white font-bold text-sm shadow-xl shadow-gray-200 hover:bg-gray-800 hover:shadow-gray-300 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Signing in...' : 'Sign in'}
+                            {loading ? (
+                                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            ) : (
+                                'Sign in'
+                            )}
                         </button>
                     </form>
 
-                    <div className="mt-6 text-center text-sm">
-                        <span className="text-gray-600">Don't have an account? </span>
-                        <Link to="/signup" className="font-medium text-primary-600 hover:text-primary-500">
-                            Sign up
-                        </Link>
+                    <div className="mt-10 pt-8 border-t border-gray-100 text-center">
+                        <p className="text-sm text-gray-600">
+                            Don't have an account?{' '}
+                            <Link to="/signup" className="font-bold text-primary-600 hover:text-primary-500 transition-colors">
+                                Create an account
+                            </Link>
+                        </p>
                     </div>
                 </div>
             </div>

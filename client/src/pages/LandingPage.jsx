@@ -1,7 +1,6 @@
-import React from 'react';
+import { ArrowRightIcon, BoltIcon, ChartBarIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ArrowRightIcon, BoltIcon, ChartBarIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 
 const LandingPage = () => {
     const { user } = useAuth();
@@ -25,35 +24,37 @@ const LandingPage = () => {
     ];
 
     return (
-        <div className="bg-white min-h-screen font-sans selection:bg-primary-100 selection:text-primary-900">
+        <div className="bg-white min-h-screen font-sans selection:bg-primary-100 selection:text-primary-900 overflow-x-hidden">
             {/* Navigation */}
-            <nav className="border-b border-gray-100 bg-white/80 backdrop-blur-md fixed w-full z-50 transition-all">
+            <nav className="border-b border-gray-100 bg-white/70 backdrop-blur-xl fixed w-full z-50 transition-all">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-20">
                         <div className="flex items-center">
-                            <span className="text-2xl font-black bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-transparent">
-                                MailGen AI
+                            <span className="text-2xl font-black bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
+                                SmartReach AI
                             </span>
                         </div>
-                        <div className="flex items-center space-x-4">
+                        <div className="hidden md:flex items-center space-x-8">
+                            <a href="#features" className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">Features</a>
+                         
                             {user ? (
                                 <Link
                                     to="/dashboard"
-                                    className="inline-flex items-center justify-center px-6 py-2.5 border border-transparent text-sm font-medium rounded-full text-white bg-primary-600 hover:bg-primary-700 hover:shadow-lg hover:shadow-primary-500/30 transition-all duration-200"
+                                    className="inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-bold text-white bg-gray-900 hover:bg-gray-800 hover:shadow-lg hover:shadow-gray-200 transition-all duration-200"
                                 >
-                                    Go to Dashboard
+                                    Dashboard
                                 </Link>
                             ) : (
                                 <>
                                     <Link
                                         to="/login"
-                                        className="text-gray-600 hover:text-gray-900 font-medium px-3 py-2 text-sm transition-colors"
+                                        className="text-sm font-bold text-gray-900 hover:text-primary-600 transition-colors"
                                     >
                                         Log in
                                     </Link>
                                     <Link
                                         to="/signup"
-                                        className="inline-flex items-center justify-center px-6 py-2.5 border border-transparent text-sm font-medium rounded-full text-white bg-primary-600 hover:bg-primary-700 hover:shadow-lg hover:shadow-primary-500/30 transition-all duration-200"
+                                        className="inline-flex items-center justify-center px-6 py-2.5 rounded-full text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 hover:shadow-lg hover:shadow-primary-500/30 transition-all duration-200"
                                     >
                                         Get Started
                                     </Link>
@@ -65,47 +66,83 @@ const LandingPage = () => {
             </nav>
 
             {/* Hero Section */}
-            <div className="relative pt-32 pb-20 sm:pt-40 sm:pb-24 overflow-hidden">
-                <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
-                    <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#ff80b5] to-[#9089fc] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }}></div>
+            <div className="relative pt-32 pb-20 sm:pt-48 sm:pb-32">
+                {/* Modern Gradient Background */}
+                <div className="absolute inset-0 -z-10 overflow-hidden">
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-to-b from-primary-50/50 to-transparent blur-3xl opacity-50"></div>
+                    <div className="absolute -top-24 right-0 w-96 h-96 bg-indigo-100/40 rounded-full blur-3xl"></div>
+                    <div className="absolute top-48 -left-24 w-96 h-96 bg-primary-100/40 rounded-full blur-3xl"></div>
                 </div>
 
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative text-center">
-                    <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 tracking-tight mb-8">
-                        Write Cold Emails That <br className="hidden md:block" />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600">Actually Get Replies</span>
-                    </h1>
-                    <p className="mt-6 text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-                        Stop wasting hours drafting outreach. Enter your prospect's context, and let our AI generate the perfect structured sequence. Email, Follow-up, and LinkedIn DM all at once.
-                    </p>
-                    <div className="mt-10 flex justify-center gap-x-6">
-                        <Link
-                            to={user ? "/dashboard" : "/signup"}
-                            className="group inline-flex items-center justify-center px-8 py-4 text-base font-semibold rounded-full text-white bg-gray-900 hover:bg-gray-800 hover:scale-105 transition-all duration-200"
-                        >
-                            Start Generating for Free
-                            <ArrowRightIcon className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </Link>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+                    <div className="text-center max-w-4xl mx-auto">
+                        <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-primary-50 border border-primary-100 mb-8 animate-fade-in">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-500"></span>
+                            </span>
+                            <span className="text-xs font-bold text-primary-700 uppercase tracking-wider">New: AI-Powered Follow-ups</span>
+                        </div>
+                        
+                        <h1 className="text-6xl md:text-8xl font-black text-gray-900 tracking-tighter mb-8 leading-[1.1]">
+                            Write Outreach <br className="hidden md:block" />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 via-indigo-600 to-primary-600 bg-[length:200%_auto] animate-gradient">That Converts</span>
+                        </h1>
+                        
+                        <p className="mt-8 text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto leading-relaxed font-medium">
+                            Stop wasting hours on manual outreach. Generate personalized sequences that look like they took hours to write, in seconds.
+                        </p>
+                        
+                        <div className="mt-12 flex flex-col sm:flex-row justify-center gap-4">
+                            <Link
+                                to={user ? "/dashboard" : "/signup"}
+                                className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-bold rounded-2xl text-white bg-gray-900 hover:bg-gray-800 transition-all duration-300 overflow-hidden shadow-2xl shadow-gray-200"
+                            >
+                                <span className="relative z-10 flex items-center">
+                                    Start Generating Free
+                                    <ArrowRightIcon className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                </span>
+                            </Link>
+                            <a
+                                href="#features"
+                                className="inline-flex items-center justify-center px-8 py-4 text-lg font-bold rounded-2xl text-gray-700 bg-white border-2 border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-all duration-300"
+                            >
+                                See How it Works
+                            </a>
+                        </div>
+
+                        {/* Social Proof / Trust Badges */}
+                        <div className="mt-20 pt-10 border-t border-gray-100">
+                            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-8">Trusted by SDRs at</p>
+                            <div className="flex flex-wrap justify-center gap-8 md:gap-16 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+                                {['Stripe', 'Airbnb', 'HubSpot', 'Salesforce', 'Shopify'].map((company) => (
+                                    <span key={company} className="text-xl font-black text-gray-800 tracking-tighter">{company}</span>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Feature Section */}
-            <div className="py-24 bg-gray-50/50 border-t border-gray-100">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="text-center mb-16">
-                        <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Everything you need to close more deals</h2>
-                        <p className="mt-4 text-lg text-gray-600 border-b-2 border-transparent inline-block pb-1">Built for sales teams who demand performance.</p>
+            <div id="features" className="py-32 bg-gray-50/50 relative">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+                    <div className="text-center mb-24">
+                        <h2 className="text-sm font-black text-primary-600 uppercase tracking-[0.2em] mb-4">Features</h2>
+                        <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">Everything you need to <br />close more deals</h3>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                        {features.map((feature) => (
-                            <div key={feature.name} className="relative p-8 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="h-12 w-12 rounded-xl bg-primary-50 flex items-center justify-center mb-6">
-                                    <feature.icon className="h-6 w-6 text-primary-600" aria-hidden="true" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {features.map((feature, i) => (
+                            <div key={feature.name} className="group relative p-10 bg-white rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-primary-500/10 transition-all duration-500 hover:-translate-y-2 overflow-hidden">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-primary-50/50 rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-150"></div>
+                                <div className="relative z-10">
+                                    <div className="h-16 w-16 rounded-2xl bg-primary-50 flex items-center justify-center mb-8 group-hover:bg-primary-600 transition-colors duration-500">
+                                        <feature.icon className="h-8 w-8 text-primary-600 group-hover:text-white transition-colors duration-500" aria-hidden="true" />
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-gray-900 mb-4 tracking-tight">{feature.name}</h3>
+                                    <p className="text-gray-600 leading-relaxed text-lg font-medium">{feature.description}</p>
                                 </div>
-                                <h3 className="text-xl font-semibold text-gray-900 mb-3">{feature.name}</h3>
-                                <p className="text-gray-600 leading-relaxed">{feature.description}</p>
                             </div>
                         ))}
                     </div>
@@ -113,43 +150,45 @@ const LandingPage = () => {
             </div>
 
             {/* Premium Look CTA */}
-            <div className="relative isolate overflow-hidden bg-gray-900">
-                <div className="px-6 py-24 sm:px-6 sm:py-32 lg:px-8">
-                    <div className="mx-auto max-w-2xl text-center">
-                        <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                            Ready to scale your outreach?
-                        </h2>
-                        <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-gray-300">
-                            Join hundreds of sales professionals using MailGen to accelerate their pipeline today.
-                        </p>
-                        <div className="mt-10 flex items-center justify-center gap-x-6">
-                            <Link
-                                to="/signup"
-                                className="rounded-full bg-primary-500 px-8 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white transition-all hover:scale-105"
-                            >
-                                Create Free Account
-                            </Link>
-                        </div>
+            <div className="relative py-32 px-6 sm:py-48 lg:px-8 bg-gray-900 overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(59,130,246,0.3),transparent)]"></div>
+                <div className="mx-auto max-w-4xl text-center relative z-10">
+                    <h2 className="text-4xl md:text-6xl font-black tracking-tight text-white mb-8">
+                        Ready to scale your <br />outreach to the moon?
+                    </h2>
+                    <p className="mx-auto mt-6 max-w-2xl text-xl leading-relaxed text-gray-300 font-medium">
+                        Join 500+ high-performance sales teams using SmartReach AI to accelerate their pipeline today.
+                    </p>
+                    <div className="mt-12 flex items-center justify-center">
+                        <Link
+                            to="/signup"
+                            className="group relative px-10 py-5 rounded-2xl bg-white text-gray-900 font-black text-lg hover:scale-105 transition-all duration-300 shadow-xl shadow-primary-500/20"
+                        >
+                            Get Started for Free
+                        </Link>
                     </div>
                 </div>
-                <svg viewBox="0 0 1024 1024" className="absolute left-1/2 top-1/2 -z-10 h-[64rem] w-[64rem] -translate-x-1/2 [mask-image:radial-gradient(closest-side,white,transparent)]" aria-hidden="true">
-                    <circle cx="512" cy="512" r="512" fill="url(#gradient)" fillOpacity="0.7" />
-                    <defs>
-                        <radialGradient id="gradient">
-                            <stop stopColor="#4f46e5" />
-                            <stop offset="1" stopColor="#818cf8" />
-                        </radialGradient>
-                    </defs>
-                </svg>
             </div>
 
             {/* Footer */}
-            <footer className="bg-white border-t border-gray-100 py-12">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
-                    <span className="text-xl font-black bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-4">
-                        MailGen AI
-                    </span>
-                    <p className="text-gray-500 text-sm">© {new Date().getFullYear()} MailGen AI. All rights reserved.</p>
+            <footer className="bg-white border-t border-gray-100 py-20">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-10">
+                        <div className="flex flex-col items-center md:items-start">
+                            <span className="text-2xl font-black bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent mb-4">
+                                SmartReach AI
+                            </span>
+                            <p className="text-gray-500 font-medium">Supercharging sales outreach with AI.</p>
+                        </div>
+                        <div className="flex gap-10 text-sm font-bold text-gray-400 uppercase tracking-widest">
+                            <a href="#" className="hover:text-gray-900 transition-colors">Privacy</a>
+                            <a href="#" className="hover:text-gray-900 transition-colors">Terms</a>
+                            <a href="#" className="hover:text-gray-900 transition-colors">Twitter</a>
+                        </div>
+                    </div>
+                    <div className="mt-20 pt-10 border-t border-gray-100 text-center">
+                        <p className="text-gray-400 text-sm font-medium">© {new Date().getFullYear()} SmartReach AI. All rights reserved.</p>
+                    </div>
                 </div>
             </footer>
         </div>
