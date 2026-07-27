@@ -8,19 +8,41 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const pinoHttp = require('pino-http');
 
+// ================================================================
+// FIX #1 (CRITICAL): dotenv + NODE_ENV default MUST run BEFORE any
+// local module is required.
+//
+// Why this was broken before:
+//   Local modules like logger.js and emailService.js compute
+//   module-level constants (isProduction, isDev) based on
+//   process.env.NODE_ENV the moment they are `require()`d.
+//   If dotenv.config() / NODE_ENV default hadn't run yet,
+//   emailService would lock in isDev=true even on Render
+//   (causing [DEV EMAIL] console spam in production logs and
+//   incorrect pino transport selection in logger.js).
+//
+//   The correct, bullet-proof order is:
+//     1. Load ONLY third-party library deps (never your own files)
+//     2. dotenv.config()
+//     3. Default NODE_ENV to "production" if unset
+//     4. NOW it's safe to require your modules (logger, routes, etc)
+// ================================================================
+dotenv.config();
+
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production';
+}
+
 const connectDB = require('./config/db');
 const logger = require('./utils/logger');
 const authRoutes = require('./routes/authRoutes');
 const aiRoutes = require('./routes/aiRoutes');
-
-dotenv.config();
-
-// FIX #1: Default NODE_ENV to "production" so deployed services (Render/Heroku/etc)
-// never accidentally run with dev-only CORS/error-masking/console-leaks even if
-// NODE_ENV is not explicitly set in the hosting env vars.
-if (!process.env.NODE_ENV) {
-  process.env.NODE_ENV = 'production';
-}
+const sendEmail = require('./utils/emailService');
+const {
+  getEmailProviderStatus,
+  getRecentAttempts,
+  sendTestEmail,
+} = require('./utils/emailService');
 
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'GROQ_API_KEY'];
 const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
@@ -224,6 +246,68 @@ app.get('/health', async (req, res) => {
     status: allHealthy ? 'ok' : 'degraded',
     ...checks,
   });
+});
+
+// ================================================================
+// EMAIL DEBUG ENDPOINTS
+// -------------------------------------------------------------
+// Use these to diagnose "why aren't OTP emails not arriving" on live
+// without running a full signup flow or sifting Render logs.
+//
+//   GET  /health/email        → Which providers are configured,
+//                              priority order, recent 20 attempts
+//   POST /health/email/test?to=you@example.com
+//                            → Send a test email (rate-limited
+// ================================================================
+app.get('/health/email', (_req, res) => {
+  try {
+    const status = getEmailProviderStatus();
+    const recent = getRecentAttempts();
+    res.json({
+      status: 'ok',
+      ...status,
+      recentAttempts: recent,
+      note:
+        'If all providers show configured:false, use POST /health/email/test?to=<your-email> to send a real test.',
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
+// Lightweight in-memory rate limit (1 req/min per IP) + email-test guard
+const testEmailLocks = new Map();
+app.post('/health/email/test', async (req, res) => {
+  const { to } = req.query;
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return res.status(400).json({
+      message: 'Missing or invalid "to" query param. Example: ?to=you@gmail.com',
+    });
+  }
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const last = testEmailLocks.get(ip) || 0;
+  const minGapMs = 60_000;
+  if (now - last < minGapMs) {
+    return res.status(429).json({
+      message: 'Test email rate limited',
+      retryAfterSeconds: Math.ceil((minGapMs - (now - last)) / 1000),
+    });
+  }
+  testEmailLocks.set(ip, now);
+
+  try {
+    const result = await sendTestEmail(to);
+    res.json({ status: 'ok', to, result });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      to,
+      error: err.message,
+      hint:
+        'EMAIL_REQUIRE_DELIVERY may be true and all providers failed. Check provider config via GET /health/email.',
+    });
+  }
 });
 
 app.use('/api/auth', authRoutes);
