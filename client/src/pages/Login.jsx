@@ -1,140 +1,282 @@
-import { useState } from 'react';
-import { toast } from 'react-hot-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Loader2,
+  Lock,
+  Moon,
+  Sun,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import api from '../utils/api';
 
+const LogoMark = () => (
+  <span className="inline-flex items-baseline gap-1 select-none">
+    <svg viewBox="0 0 24 24" width={16} height={16} className="mb-0.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+      <path d="M8 7h8" />
+      <path d="M8 11h8" />
+      <path d="M8 15h5" />
+    </svg>
+    <span className="serif font-semibold tracking-tightest text-xl text-ink-900 dark:text-paper-50">
+      Draftwell
+    </span>
+  </span>
+);
+
+const PaperPanel = () => (
+  <div className="hidden lg:flex lg:flex-col lg:justify-between p-14 xl:p-20 bg-paper-100 dark:bg-ink-900/80 border-r border-ink-200 dark:border-ink-800 relative overflow-hidden">
+    <div className="relative z-10">
+      <RouterLink to="/" className="inline-flex">
+        <LogoMark />
+      </RouterLink>
+      <p className="eyebrow mt-10">Issue 01 · From the desk</p>
+      <h2 className="serif text-4xl xl:text-5xl mt-6 leading-[1.02] tracking-tightest text-ink-900 dark:text-paper-50">
+        A writer of drafts. <br />
+        <em className="italic text-accent-700 dark:text-accent-400">Not</em> a sender of spam.
+      </h2>
+    </div>
+
+    <div className="relative z-10 mt-16 sheet p-8 shadow-paper-sm animate-slide-up max-w-md">
+      <div className="flex items-center justify-between">
+        <p className="eyebrow">Cover letter · Unsaved</p>
+        <span className="chip">
+          <Lock className="w-3 h-3" />
+          Sign in to save
+        </span>
+      </div>
+      <p className="mt-5 text-xs uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400 font-semibold">
+        Subject
+      </p>
+      <h3 className="serif text-lg mt-1.5 text-ink-900 dark:text-paper-50 font-semibold leading-snug">
+        Product designer with a portfolio of shipped design systems
+      </h3>
+      <div className="rule-dashed my-5" />
+      <p className="drop-cap text-[15px] leading-[1.9] text-ink-800 dark:text-paper-100">
+        I read your post last week on the cost of inconsistent components. I’ve been on three
+        teams that wrote the same button four times, and the one that didn’t still has a $40k
+        accessibility debt. I’d like to spare you that — and send you the audit I ran if it’s
+        useful. Twenty minutes next Wednesday?
+      </p>
+      <p className="mt-4 text-[15px] leading-[1.9] text-ink-800 dark:text-paper-100">— Mira</p>
+      <div className="mt-6 pt-4 rule-dashed flex items-center justify-between text-xs text-ink-500 dark:text-ink-400">
+        <span className="mono">Persuasive · 122 words</span>
+        <span className="mono">3 min before editing</span>
+      </div>
+    </div>
+
+    <div className="relative z-10 mono text-[11px] tracking-widest uppercase text-ink-400 dark:text-ink-500">
+      Log in · and pick up where your last draft left off
+    </div>
+  </div>
+);
+
 const Login = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const navigate = useNavigate();
-    const { login } = useAuth();
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [lockSecs, setLockSecs] = useState(0);
+  const [genericErr, setGenericErr] = useState('');
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            const { data } = await api.post('/auth/login', { email, password });
-            login(data);
-            toast.success('Logged in successfully!');
-            navigate('/dashboard');
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Login failed');
-        } finally {
-            setLoading(false);
-        }
-    };
+  useEffect(() => {
+    if (lockSecs <= 0) return;
+    const t = setInterval(() => setLockSecs((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [lockSecs]);
 
-    return (
-        <div className="min-h-screen flex bg-white font-sans">
-            {/* Left Side: Illustration/Gradient */}
-            <div className="hidden lg:flex lg:w-1/2 bg-gray-900 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary-600 to-indigo-900 opacity-90"></div>
-                <div className="relative z-10 w-full flex flex-col justify-center px-20">
-                    <div className="mb-12">
-                        <span className="text-3xl font-black text-white tracking-tight">SmartReach AI</span>
-                    </div>
-                    <h1 className="text-5xl font-extrabold text-white leading-tight mb-6">
-                        Unlock the power of <br />
-                        <span className="text-primary-400">AI Outreach.</span>
-                    </h1>
-                    <p className="text-xl text-primary-100/80 leading-relaxed max-w-lg">
-                        Join 5,000+ sales teams generating high-converting sequences in seconds.
-                    </p>
-                    
-                    <div className="mt-12 space-y-6">
-                        {[
-                            'Generate email, follow-up & LinkedIn DM',
-                            'Personalized at scale with one click',
-                            'Optimized for maximum reply rates'
-                        ].map((feature, i) => (
-                            <div key={i} className="flex items-center text-white/90">
-                                <div className="h-6 w-6 rounded-full bg-primary-500/20 border border-primary-500/30 flex items-center justify-center mr-4">
-                                    <svg className="h-3.5 w-3.5 text-primary-400" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                                <span className="font-medium">{feature}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                {/* Decorative circles */}
-                <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl"></div>
-                <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
-            </div>
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setGenericErr('');
+    if (!email || !password) {
+      toast.error('Enter an email and password.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await api.post('/auth/login', { email, password });
+      const data = res.data?.data || res.data;
+      login({
+        token: data.token,
+        _id: data._id,
+        name: data.name,
+        email: data.email,
+        isVerified: data.isVerified,
+        lastLoginAt: data.lastLoginAt,
+      });
+      toast.success('Welcome back.');
+      navigate('/app/editor', { replace: true });
+    } catch (err) {
+      const status = err?.response?.status;
+      const payload = err?.response?.data;
+      const retryAfter = payload?.retryAfterSeconds;
+      if (status === 423 && typeof retryAfter === 'number') {
+        setLockSecs(retryAfter);
+      }
+      const msg =
+        status === 423
+          ? `Too many attempts. Account locked for ${Math.ceil(retryAfter / 60)} minutes.`
+          : status === 401
+          ? payload?.message || payload?.error || 'Email or password didn’t match.'
+          : status === 429
+          ? 'Too many requests. Slow down and try again.'
+          : payload?.message || payload?.error || 'Something went wrong.';
+      setGenericErr(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-            {/* Right Side: Form */}
-            <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-20 py-12 bg-gray-50/30">
-                <div className="max-w-md w-full mx-auto">
-                    <div className="lg:hidden mb-8">
-                        <span className="text-2xl font-black bg-gradient-to-r from-primary-600 to-indigo-600 bg-clip-text text-transparent">
-                            SmartReach AI
-                        </span>
-                    </div>
+  const mins = Math.floor(lockSecs / 60);
+  const secs = lockSecs % 60;
 
-                    <div className="mb-10">
-                        <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Welcome back</h2>
-                        <p className="mt-3 text-gray-600">Enter your credentials to access your account</p>
-                    </div>
+  return (
+    <div className="min-h-screen flex relative">
+      <button
+        type="button"
+        aria-label="Toggle theme"
+        onClick={toggleTheme}
+        className="fixed top-5 right-5 z-20 p-2.5 rounded-sm border border-transparent hover:border-ink-200 dark:hover:border-ink-700 text-ink-600 dark:text-ink-300 hover:text-ink-900 dark:hover:text-paper-50 hover:bg-paper-50 dark:hover:bg-ink-800/70 bg-paper-100/70 dark:bg-ink-900/60 backdrop-blur-sm"
+      >
+        {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
 
-                    <form className="space-y-6" onSubmit={handleSubmit}>
-                        <div className="space-y-2">
-                            <label className="text-sm font-semibold text-gray-700 tracking-wide">Email Address</label>
-                            <input
-                                type="email"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="name@company.com"
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all outline-none"
-                            />
-                        </div>
+      <PaperPanel />
 
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                                <label className="text-sm font-semibold text-gray-700 tracking-wide">Password</label>
-                                {/* <a href="#" className="text-xs font-semibold text-primary-600 hover:text-primary-500 transition-colors">Forgot password?</a> */}
-                            </div>
-                            <input
-                                type="password"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all outline-none"
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-4 px-6 rounded-xl bg-gray-900 text-white font-bold text-sm shadow-xl shadow-gray-200 hover:bg-gray-800 hover:shadow-gray-300 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                            {loading ? (
-                                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                            ) : (
-                                'Sign in'
-                            )}
-                        </button>
-                    </form>
-
-                    <div className="mt-10 pt-8 border-t border-gray-100 text-center">
-                        <p className="text-sm text-gray-600">
-                            Don't have an account?{' '}
-                            <Link to="/signup" className="font-bold text-primary-600 hover:text-primary-500 transition-colors">
-                                Create an account
-                            </Link>
-                        </p>
-                    </div>
-                </div>
-            </div>
+      <div className="flex-1 flex flex-col">
+        <div className="lg:hidden px-6 pt-8 flex items-center justify-between">
+          <RouterLink to="/"><LogoMark /></RouterLink>
         </div>
-    );
+
+        <div className="flex-1 flex items-center justify-center px-6 py-12 lg:py-16">
+          <div className="w-full max-w-md animate-fade-in">
+            <div>
+              <p className="eyebrow mb-4">Sign in</p>
+              <h1 className="serif text-4xl md:text-5xl leading-[1.02] tracking-tightest text-ink-900 dark:text-paper-50">
+                Welcome back <br />
+                to the desk.
+              </h1>
+              <p className="mt-5 text-sm leading-relaxed text-ink-600 dark:text-ink-400">
+                You need to verify your email on your first sign-in. After that, it’s straight to work.
+              </p>
+            </div>
+
+            {lockSecs > 0 && (
+              <div className="mt-8 p-4 rounded-sm border border-accent-300 dark:border-accent-800 bg-accent-50 dark:bg-accent-900/20 flex items-start gap-3 animate-fade-in">
+                <AlertTriangle className="w-5 h-5 text-accent-700 dark:text-accent-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-accent-800 dark:text-accent-300">
+                    Temporarily locked
+                  </p>
+                  <p className="mt-1 text-sm text-accent-700 dark:text-accent-400">
+                    Too many failed attempts. Retry in{' '}
+                    <span className="mono font-semibold">
+                      {mins}:{String(secs).padStart(2, '0')}
+                    </span>
+                    .
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={onSubmit} className="mt-10 space-y-5" noValidate>
+              <div>
+                <label className="label" htmlFor="email">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  className="field"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value.trim())}
+                  placeholder="you@company.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="label !mb-0" htmlFor="password">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => toast("If you've lost your password, make a new account for now — this demo doesn't have a reset flow.")}
+                    className="text-xs text-accent-700 dark:text-accent-400 hover:underline underline-offset-4"
+                  >
+                    Forgot?
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPw ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    className="field !pr-12"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="8+ characters"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw((v) => !v)}
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-ink-400 dark:text-ink-500 hover:text-ink-700 dark:hover:text-ink-300"
+                  >
+                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {genericErr && (
+                <p className="text-sm text-accent-700 dark:text-accent-400 font-semibold">
+                  {genericErr}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="btn-primary w-full justify-center py-3 text-base"
+                disabled={submitting || lockSecs > 0}
+              >
+                {submitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>
+                ) : (
+                  <>Sign in <ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
+            </form>
+
+            <div className="rule-dashed my-10" />
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-ink-600 dark:text-ink-400">
+              <p>New here?</p>
+              <RouterLink to="/signup" className="btn-outline w-full sm:w-auto justify-center">
+                Create an account
+                <ArrowRight className="w-4 h-4" />
+              </RouterLink>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 pb-8 text-center mono text-[10px] tracking-[0.25em] uppercase text-ink-400 dark:text-ink-500">
+          Draftwell · Set in Playfair Display and Inter · MIT licensed
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Login;

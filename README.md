@@ -96,3 +96,100 @@ It prevents bad pushes from making it effectively resolving broken dependencies 
    - `VITE_API_URL`: Your newly minted Backend URL + `/api` (e.g., `https://ai-backend.onrender.com/api`)
 5. Click **Deploy**. Vercel will deploy your frontend seamlessly.
 6. **Important**: Remember to go back to Render and update your backend `FRONTEND_URL` Variable to the Vercel domain to dodge tricky CORS errors.
+
+---
+
+## 🏗️ Architecture
+
+```
+                      ┌──────────────────────────────┐
+                      │   Browser (Vite + React 18) │
+                      │   Tailwind · lucide-react    │
+                      │   Playfair Display + Inter   │
+                      │   AuthContext + ThemeContext │
+                      └─────────────┬────────────────┘
+                                    │
+                                    │ VITE_API_URL/api (CORS dev-only localhost)
+                                    ▼
+                      ┌──────────────────────────────┐
+                      │   Express 4.x HTTP Server    │
+                      │ helmet + CSP nonces  ·  pino │
+                      │ express-rate-limit × 3 tiers │
+                      │ express-validator per-route  │
+                      └──────────┬───────────────────┘
+         ┌───────────────────────┼───────────────────────┐
+         ▼                       ▼                       ▼
+┌─────────────────┐   ┌───────────────────┐   ┌───────────────────┐
+│ JWT auth        │   │ AI + CRUD         │   │ Export            │
+│ register        │   │ generate-email    │   │ /export?format=   │
+│ verify-otp      │   │ (Groq, 4 tones,   │   │  pdf → pdfkit     │
+│ resend-otp      │   │  numVariants 1-3) │   │  txt → plain text │
+│ login           │   │ history $text     │   └───────────────────┘
+│ bcrypt + OTP    │   │ PATCH edits       │
+│ rate-limit 5/15 │   │ tags · favorite   │
+└────────┬────────┘   │ status · variants │
+         │            └────────┬──────────┘
+         ▼                     ▼
+┌──────────────────┐  ┌───────────────────────┐
+│  MongoDB Atlas   │  │  Nodemailer (dev:     │
+│  Mongoose 7.x    │  │   logs OTP to stdout) │
+│  User ·          │  └───────────────────────┘
+│  EmailHistory    │        │
+│  (tone/tags/     │        ▼
+│   favorite/      │  ┌───────────────────────┐
+│   status/        │  │ Groq API              │
+│   variants[])    │  │ llama-3.3-70b         │
+└──────────────────┘  └───────────────────────┘
+```
+
+**Core data model:**
+```
+User           { _id, email, name, passwordHash, otpHash, otpExpiry,
+                 isVerified, failedLoginAttempts, lockedUntil, lastLoginAt }
+
+EmailHistory   { _id, userId, prompt, tone,
+                 subject, emailBody, linkedInDM, followUpEmail,
+                 tags[String], isFavorite: Boolean,
+                 status: Enum(draft|sent|replied),
+                 sentAt, repliedAt,
+                 variants: [ { variantId, subject, emailBody,
+                                linkedInDM, followUpEmail, selected } ] }
+```
+
+**Security hardening (non-negotiable, all active):**
+- 3 tiers of `express-rate-limit` (login locked after 5 × 15 min; strict OTP routes 3 × 15 min; AI generate 20 × 1 min)
+- Bcrypt on password *and* OTP (hashed; no plaintext anywhere)
+- Body size cap on `express.json()`
+- Errors: raw `err.message` stripped in production
+- CORS: dev-only localhost
+- Helmet + CSP with per-request nonces in headers
+
+---
+
+## 💡 Why I Built This
+
+Generic AI cold-email tools look like chatbots with rounded cards, but writing outreach is a *drafting task* — it needs a desk, not a chat bubble. I wanted:
+
+1. **Editorial tool, not a chatbot.** Warm paper background, serif document headings, justified body with a hanging indent. Split drafting-desk on the left, live document on the right. No gradients, no blobs, no "brewing magic" copy.
+2. **Everything persists and is revisitable.** Too many wrappers throw away the output after you leave. Here every generation is saved, taggable, favorite-able, searchable, exportable. Mark one *sent*; mark the reply when it comes.
+3. **Actually useful variants.** 2–3 parallel A/B drafts, not a spinner that re-rolls the whole thing. Pick a variant, edit it inline, Save — and the backend keeps the selected variant in sync with the document-level fields so older clients/exports still read cleanly.
+4. **Portfolio-grade security, not a demo.** Most side projects skip rate limiting and hash only the password. This one has 3 tiers of rate limiting, OTP hashing *and* bcrypt, CSP nonces, production error masking, pino structured logs with redaction, Mongo text-indexed search with filter+pagination.
+5. **Deploy on free tier.** Docker Compose for local; Render backend + Vercel frontend; Mongo Atlas free tier. No infra to babysit.
+
+---
+
+## 🎯 What I Learned
+
+### Backend / Design
+- **Variants without breaking legacy callers is tricky.** The Editor sends a `variants: [...]` array on Save, but exports and older reads still look at top-level `subject/emailBody/...`. Solution: on every PATCH, compute the selected variant (default to first if none selected) and mirror it into the top-level fields. This keeps historical records, the PDF export function, and the detail view all working without a migration.
+- **Rate limits share a namespace by design.** Register + resend + verify are all under `strictLimiter` so a single IP can't hammer a 6-digit OTP space 3× per 15 min. During E2E I hit this repeatedly — which proved it was working, not that it was buggy.
+- **Never assume the client matches your JSON shape.** `express-validator` with `matchedData()` on every handler + nested `variants.*.subject.isLength` caps means malformed arrays or 10 MB prompts are rejected before the controller sees them. Found and fixed 3 of these contract mismatches *during* the E2E pass.
+
+### Frontend / UX
+- **Tailwind opacity modifiers break silently if DEFAULT is missing.** `text-moss` and `bg-moss/10` were used everywhere but the `moss: { 50, 100, 600, 700 }` palette had no `DEFAULT`. Everything rendered as the *currentColor* fallback — invisible. Added `DEFAULT: '#6B705C'` and the whole History page and tone cards appeared.
+- **`group-hover:flex` with no parent `group`** is the new "forgot to bind onclick". The Export dropdown used `.group-hover:flex` on the dropdown but its wrapper was only `className="relative"`. Added `group` and it instantly started working.
+- **Error field naming matters.** Backend sent `{ field, message }` but Signup was reading `first.param` / `first.msg` from the old express-validator default. Same for root error — it was reading `payload.error` but the canonical key is `payload.message`. Fixed in Login/Verify/Signup together and users now see real explanations instead of "Something went wrong."
+
+### Operations / Testing
+- **Capture server logs for OTP in dev.** Without SMTP configured locally, `emailService` threw on every OTP send. Refactored to log a `[DEV EMAIL]` banner with the full message (OTP extractable via regex) and return success in dev. E2E tests then scrape OTPs from `/tmp/server_out.log` by line offset — no test accounts or manual copying needed.
+- **Heredocs in shells hate quotes.** Both the prior agent and I lost 2 smoke runs to `sh -c` heredoc quoting mangling the Python script every time. The fix: `Write` file to `/tmp/final_smoke.py` first, then run `python3 /tmp/final_smoke.py` clean. 0 quoting issues after that.
