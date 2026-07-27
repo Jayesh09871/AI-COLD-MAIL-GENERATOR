@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 const helmet = require('helmet');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
@@ -228,14 +229,59 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
 
+// RENDER BUG FIX: Guard client/dist static serving with existence check.
+//
+// Why: On Render the backend uses Root Directory = "server" and the client
+// is deployed separately on Vercel. The path `../client/dist` does not exist
+// inside Render's built image (we never ran `npm run build` inside the
+// server/ service), and the prior unguarded code threw:
+//   {"message":"ENOENT: no such file or directory, stat '/client/dist/index.html'"}
+// on any non-API route (including / favicon.ico hits from browsers, which
+// would bubble up to the error handler as a scary 500).
+//
+// Behaviors after fix:
+//   - client/dist EXISTS (local full-monorepo dev): serve static assets +
+//     SPA index.html fallback exactly as before — full backwards compat.
+//   - client/dist MISSING (Render / pure API deployments): skip mounting
+//     the static middleware entirely and, instead of trying sendFile on a
+//     nonexistent path, return a clean JSON 404 pointing the user at the
+//     real frontend URL (from FRONTEND_URL env var) so they aren't lost.
 const __dirnamePath = path.resolve();
 const clientBuildPath = path.join(__dirnamePath, '..', 'client', 'dist');
-app.use(express.static(clientBuildPath));
+const clientDistExists = fs.existsSync(clientBuildPath);
 
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/health')) {
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
+if (clientDistExists) {
+  logger.info({ clientBuildPath }, 'Serving client SPA from client/dist');
+  app.use(express.static(clientBuildPath));
+} else {
+  logger.info(
+    { clientBuildPath, frontendUrl: process.env.FRONTEND_URL || null },
+    'client/dist not found — running API-only mode. Frontend expected at FRONTEND_URL',
+  );
+}
+
+app.get('*', (req, res, next) => {
+  // Never intercept API/health routes — always let them hit router/404
+  if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
+    return next();
   }
+  if (clientDistExists) {
+    return res.sendFile(path.join(clientBuildPath, 'index.html'));
+  }
+  // API-only deployment (Render + Vercel-split) — guide the user to the
+  // correct frontend URL so they don't see a raw ENOENT 500.
+  const frontend = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/\/+$/, '')
+    : null;
+  if (frontend) {
+    return res.status(404).json({
+      message: 'This service runs in API-only mode. Visit the frontend URL to use the app.',
+      frontendUrl: frontend,
+      path: req.originalUrl,
+      docs: 'Set client/dist to serve SPA from this server, or host frontend separately (recommended on Vercel).',
+    });
+  }
+  return next();
 });
 
 app.use((req, res) => {
