@@ -35,17 +35,37 @@ exports.registerUser = async (req, res) => {
 
   try {
     const { name, email, password } = matchedData(req);
+    const normalizedEmail = email.toLowerCase();
 
-    const userExists = await User.findOne({ email: email.toLowerCase() });
-    if (userExists) {
-      logger.info({ email }, 'Registration attempt with existing email');
-      return res.status(400).json({ message: 'Email already registered. Please try logging in.' });
+    let existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      // If the existing account is already VERIFIED → return the usual
+      // "Email already registered" 400 error. A verified user must log in
+      // normally or use the password-reset flow.
+      if (existingUser.isVerified) {
+        logger.info({ email: normalizedEmail }, 'Registration attempt with existing VERIFIED email');
+        return res
+          .status(400)
+          .json({ message: 'Email already registered. Please try logging in.' });
+      }
+
+      // Existing account is UNVERIFIED (the user abandoned the OTP screen or
+      // never received the email). To avoid blocking the user with a stale
+      // unverified row, DELETE the old document so the user can re-sign up
+      // cleanly with the same email — new password, new name, new OTP.
+      // This also means any EmailHistory documents owned by this stale user
+      // are orphaned (acceptable since the user never verified & used them).
+      logger.info(
+        { email: normalizedEmail, staleUserId: existingUser._id },
+        'Replacing stale unverified user record with fresh registration'
+      );
+      await User.deleteOne({ _id: existingUser._id, isVerified: false });
     }
 
     const otp = generateOTP();
     const user = new User({
       name: name.trim(),
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password,
     });
     await user.setOtp(otp);
@@ -389,6 +409,7 @@ exports.resetPassword = async (req, res) => {
       _id: user._id,
       email: user.email,
       name: user.name,
+      isVerified: user.isVerified,
     });
   } catch (error) {
     logger.error({ error: error.message, stack: error.stack }, 'Reset password failed');

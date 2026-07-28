@@ -1,22 +1,21 @@
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import {
+    ArrowRight,
+    Check,
+    Eye,
+    EyeOff,
+    Loader2,
+    Lock,
+    Moon,
+    Sparkles,
+    Sun,
+    UserPlus,
+    X,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  ArrowRight,
-  Eye,
-  EyeOff,
-  Loader2,
-  Lock,
-  Check,
-  X,
-  Moon,
-  Sun,
-  Sparkles,
-  UserPlus,
-} from 'lucide-react';
-import api from '../utils/api';
-import { useAuth } from '../context/AuthContext';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import api from '../utils/api';
 
 const LogoMark = () => (
   <span className="inline-flex items-baseline gap-1 select-none">
@@ -81,7 +80,6 @@ const PwRule = ({ ok, label }) => (
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -128,15 +126,19 @@ const Signup = () => {
     try {
       const res = await api.post('/auth/register', { name: name.trim(), email, password });
       const data = res.data?.data || res.data;
-      login({
-        token: data.token,
-        _id: data._id,
-        name: data.name,
-        email: data.email,
-        isVerified: data.isVerified,
-      });
+      // SECURITY FIX: do NOT call AuthContext.login() here. Register
+      // /register intentionally does NOT issue a token nor set isVerified.
+      // Persisting a partial { token: undefined, isVerified: undefined } object
+      // would bypass ProtectedRoute's isVerified gate and leak the /app/editor page
+      // to unverified users. Instead we pass userId+email via navigate state
+      // so VerifyOtp reads them on the next screen.
+      const userId = data?._id || data?.userId;
+      const navigateEmail = data?.email || email;
       toast.success('Check your email (or the terminal) for the 6-digit code.');
-      navigate('/verify-otp', { state: { email }, replace: true });
+      navigate('/verify-otp', {
+        state: { email: navigateEmail, userId, reason: 'just-registered' },
+        replace: true,
+      });
     } catch (err) {
       const status = err?.response?.status;
       const payload = err?.response?.data;

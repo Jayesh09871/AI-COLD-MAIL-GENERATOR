@@ -22,8 +22,39 @@ const userSchema = new mongoose.Schema(
     lastLoginAt: { type: Date },
     failedLoginAttempts: { type: Number, default: 0 },
     lockedUntil: { type: Date },
+    // ================================================================
+    // AUTO-CLEANUP for UNVERIFIED users (MongoDB TTL index).
+    // Set only when the user first registers (isVerified: false).
+    // MongoDB's background TTL monitor will DELETE this document
+    // automatically at the timestamp below unless the user completes
+    // OTP verification — at which point we clear autoDeleteAt and
+    // the user becomes permanent.
+    //
+    // NOTE: TTL index on this field uses expireAfterSeconds: 0 so
+    // the exact Date stored controls expiry.
+    // ================================================================
+    autoDeleteAt: {
+      type: Date,
+      default: () => new Date(Date.now() + 24 * 60 * 60 * 1000), // +24h
+      index: { expireAfterSeconds: 0, partialFilterExpression: { isVerified: false } },
+    },
   },
   { timestamps: true }
+);
+
+// TTL index (declarative version, applied on next mongoose connect).
+// Partial filter: only rows where isVerified === false are eligible for auto-delete.
+// Verified users (isVerified: true + autoDeleteAt cleared above → null) skip the index
+// and live forever (normal accounts).
+// NOTE: we keep the field-level index above so Mongoose creates it. This is a
+// safety-net fallback via schema.index() for older Mongoose versions.
+userSchema.index(
+  { autoDeleteAt: 1 },
+  {
+    expireAfterSeconds: 0,
+    partialFilterExpression: { isVerified: false },
+    background: true,
+  }
 );
 
 userSchema.pre('save', async function (next) {
@@ -38,6 +69,14 @@ userSchema.pre('save', async function (next) {
   if (this.isModified('resetOtpHash') && this.resetOtpHash && !this.resetOtpHash.startsWith('$2')) {
     const salt = await bcrypt.genSalt(10);
     this.resetOtpHash = await bcrypt.hash(this.resetOtpHash, salt);
+  }
+  // ---------------------------------------------------------------
+  // When a user VERIFIES (isVerified transitions false → true), clear
+  // the autoDeleteAt timestamp so MongoDB's TTL monitor no longer
+  // considers this document for expiration. Verified accounts live on.
+  // ---------------------------------------------------------------
+  if (this.isModified('isVerified') && this.isVerified === true) {
+    this.autoDeleteAt = undefined;
   }
   next();
 });

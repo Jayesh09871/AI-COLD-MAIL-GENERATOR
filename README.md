@@ -18,7 +18,7 @@ npm run install:all
 \`\`\`
 
 **2. Setup your Environment Variables**  
-- Create a `.env` in the `/server` folder based on `.env.example`. Make sure your `MONGO_URI` is correctly pointing to your preferred MongoDB instance.  
+- Create a `.env` in the `/server` folder based on `.env.example`. Make sure your `MONGODB_URI` is correctly pointing to your preferred MongoDB instance.  
 - Create a `.env` in the `/client` folder with: `VITE_API_URL=http://localhost:5000/api`
 - **Email (Brevo SMTP):** Sign up for free at [Brevo](https://www.brevo.com/) (300 emails/day forever), then copy the 6 SMTP variables from Brevo → Top-right menu → SMTP & API → SMTP tab into `server/.env`:
   ```env
@@ -92,7 +92,7 @@ It prevents bad pushes from making it effectively resolving broken dependencies 
    - **Build Command**: `npm install`
    - **Start Command**: `node server.js`  *(Make sure to use node instead of nodemon for production)*
    - **Instance Type**: Free
-6. Under **Environment Variables**, add all the variables from your `.env` file (e.g. `MONGO_URI`, `JWT_SECRET`, `GROQ_API_KEY`, `FRONTEND_URL`). **To get real OTP emails on live, also add the 6 Brevo SMTP vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`) from `.env.example` — Gmail SMTP will NOT work on Render datacenter IPs.**
+6. Under **Environment Variables**, add all the variables from your `.env` file (e.g. `MONGODB_URI`, `JWT_SECRET`, `GROQ_API_KEY`, `FRONTEND_URL`). **To get real OTP emails on live, also add the 6 Brevo SMTP vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`) from `.env.example` — Gmail SMTP will NOT work on Render datacenter IPs.**
 7. Click **Create Web Service**.
 
 ### Deploying Frontend on Vercel

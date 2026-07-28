@@ -9,16 +9,17 @@ const logger = require('./logger');
 //     RESEND_API_KEY env var, no sendViaResend codepath).
 //   - All emails go through nodemailer + Brevo SMTP on
 //     smtp-relay.brevo.com:587 with STARTTLS.
-//   - Gmail SMTP is left as a fallback only and is NOT the
-//     supported path; Brevo has superior datacenter-IP deliverability.
+//   - Gmail SMTP is COMMENTED OUT below for now. If needed later,
+//     uncomment the sendViaGmail block and re-add it to the
+//     providers array in sendEmail().
 //
 // Error-handling policy:
 //   - If Brevo SMTP credentials are configured (SMTP_HOST/PORT/USER/PASS
 //     are all set), sendEmail RETURNS AN ERROR (throws or returns
 //     { success: false, error: '...' }) if the email can't be
 //     delivered, so register/resend-otp do NOT falsely report success.
-//   - Only if NO provider is configured at all (SMTP vars missing,
-//     Gmail also missing) do we return { success: true, skipped: true }
+//   - Only if NO provider is configured at all (SMTP vars missing)
+//     do we return { success: true, skipped: true }
 //     with OTP logged so a completely-unconfigured local/dev setup
 //     doesn't block signups on the demo/localhost path.
 //
@@ -99,6 +100,169 @@ const isTransient = (err) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ================================================================
+// Email rendering helpers — richer HTML body + standard headers
+// dramatically improve Gmail Primary-tab placement.
+// ================================================================
+
+// Standard transactional-email headers Gmail & Brevo respect to
+// avoid the "Promotions" / "Spam" bucket.
+const buildTransactionalHeaders = (from, to) => {
+  const fromEmailMatch = String(from || '').match(/<([^>]+)>/);
+  const fromEmail = fromEmailMatch
+    ? fromEmailMatch[1]
+    : String(from || '').trim();
+  const listUnsubscribeMailto = fromEmail
+    ? `mailto:${fromEmail}?subject=Unsubscribe%20from%20SmartReach%20AI`
+    : '';
+  return {
+    'Precedence': 'bulk',
+    'Auto-Submitted': 'auto-generated',
+    'X-Auto-Response-Suppress': 'All',
+    'X-MC-Autotext': 'on',
+    ...(listUnsubscribeMailto
+      ? { 'List-Unsubscribe': `<${listUnsubscribeMailto}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+      : {}),
+    // Brevo-specific tags for categorization in their dashboard
+    'X-Mailer': 'Nodemailer (SmartReach AI)',
+    'X-SmartReach-Type': /OTP|verification|reset|password/i.test(to)
+      ? 'transactional'
+      : 'transactional',
+  };
+};
+
+// Plain text to HTML — preserve line breaks, escape for safety.
+const escapeHtml = (s) =>
+  String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+const textToHtmlInline = (text) =>
+  escapeHtml(text).replace(/\n/g, '<br/>');
+
+// Extract a 6-digit OTP from text so we can highlight it in the template.
+const extract6DigitCode = (text) => {
+  const m = String(text || '').match(/\b(\d{6})\b/);
+  return m ? m[1] : '';
+};
+
+// Fully-themed HTML template — Gmail prefers "real" HTML (not just
+// a <p> wrapper) with clear branding, a proper hero section, and a
+// visible footer. This is NOT marketing — it's the minimum viable
+// layout so Gmail doesn't classify it as "promotional / thin content".
+const buildHtmlBody = ({ subject, message }) => {
+  const code = extract6DigitCode(message);
+  const hasCode = Boolean(code);
+  const safeSubject = escapeHtml(subject || 'SmartReach AI');
+  const bodyHtml = textToHtmlInline(message);
+  const year = new Date().getFullYear();
+
+  const otpBlock = hasCode
+    ? `
+  <tr>
+    <td style="padding: 24px 0 8px 0; text-align:center;">
+      <div style="display:inline-block; background:#EEF2FF; border:2px dashed #6366F1; border-radius:14px; padding:18px 34px; letter-spacing:8px; font-size:32px; font-weight:800; color:#4338CA; font-family:'Helvetica Neue', Arial, sans-serif;">
+        ${escapeHtml(code)}
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 4px 0 20px 0; text-align:center; font-size:13px; color:#6B7280; font-family:'Helvetica Neue', Arial, sans-serif;">
+      Code valid for 10 minutes. Do not share it with anyone.
+    </td>
+  </tr>`
+    : '';
+
+  // If no OTP is present, show the raw body paragraphs as-is (for test emails etc.)
+  const bodyBlock = hasCode
+    ? ''
+    : `
+  <tr>
+    <td style="padding: 18px 0 24px 0; font-size:15px; line-height:1.6; color:#1F2937; font-family:'Helvetica Neue', Arial, sans-serif;">
+      ${bodyHtml}
+    </td>
+  </tr>`;
+
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeSubject}</title>
+</head>
+<body style="margin:0; padding:0; background:#F3F4F6; -webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F3F4F6;">
+    <tr>
+      <td align="center" style="padding: 32px 12px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px; background:#FFFFFF; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <!-- Header bar -->
+          <tr>
+            <td style="padding: 22px 32px; background: linear-gradient(135deg,#4F46E5 0%,#6366F1 100%); border-radius:16px 16px 0 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="color:#FFFFFF; font-family:'Helvetica Neue', Arial, sans-serif; font-size:18px; font-weight:700;">
+                    SmartReach AI
+                  </td>
+                  <td align="right" style="color:#E0E7FF; font-family:'Helvetica Neue', Arial, sans-serif; font-size:12px;">
+                    Transactional Email
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding: 28px 32px 12px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding-bottom: 6px; color:#111827; font-family:'Helvetica Neue', Arial, sans-serif; font-size:20px; font-weight:700;">
+                    ${safeSubject}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 0 8px 0; color:#6B7280; font-family:'Helvetica Neue', Arial, sans-serif; font-size:13px;">
+                    ${new Date().toLocaleString()}
+                  </td>
+                </tr>
+                ${bodyBlock}
+                ${otpBlock}
+                ${hasCode ? `
+                <tr>
+                  <td style="padding: 4px 0 12px 0; font-size:15px; line-height:1.6; color:#374151; font-family:'Helvetica Neue', Arial, sans-serif;">
+                    Enter this 6-digit code on the SmartReach AI verification screen to confirm your identity. If you did not request this email, you can safely ignore it.
+                  </td>
+                </tr>` : ''}
+              </table>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 18px 32px 26px 32px; border-top:1px solid #E5E7EB; background:#FAFAFA; border-radius:0 0 16px 16px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="color:#6B7280; font-family:'Helvetica Neue', Arial, sans-serif; font-size:12px; line-height:1.6;">
+                    &copy; ${year} SmartReach AI. This email was sent in response to an account action (registration, verification, or password reset) initiated by you.
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top:8px; color:#9CA3AF; font-family:'Helvetica Neue', Arial, sans-serif; font-size:11px;">
+                    SmartReach AI &middot; AI-powered cold email generator
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+};
+
+// ================================================================
 // PROVIDER #1 (AND ONLY SUPPORTED ONE): Brevo SMTP
 //   Required env vars: SMTP_HOST=smtp-relay.brevo.com
 //                      SMTP_PORT=587
@@ -120,6 +284,8 @@ const sendViaBrevoSmtp = async (options) => {
   const secure =
     process.env.SMTP_SECURE === 'true' || String(port) === '465';
   const from = process.env.SMTP_FROM || user;
+  // Use the from-address domain as reply-to so replies don't bounce to Brevo's envelope
+  const replyTo = process.env.SMTP_REPLY_TO || from;
   const provider = `brevo-smtp:${host}`;
 
   let transporter = null;
@@ -138,13 +304,21 @@ const sendViaBrevoSmtp = async (options) => {
   };
 
   const doSend = async () => {
-    const info = await getTransporter().sendMail({
+    const subject = options.subject || 'SmartReach AI';
+    const textBody = options.message || '';
+    const headers = buildTransactionalHeaders(from, subject);
+    const htmlBody = options.html || buildHtmlBody({ subject, message: textBody });
+
+    const mail = {
       from,
       to: options.email,
-      subject: options.subject,
-      text: options.message,
-      html: `<p>${options.message.replace(/\n/g, '<br/>')}</p>`,
-    });
+      replyTo,
+      subject,
+      text: textBody,
+      html: htmlBody,
+      headers,
+    };
+    const info = await getTransporter().sendMail(mail);
     return {
       success: true,
       provider,
@@ -185,7 +359,15 @@ const sendViaBrevoSmtp = async (options) => {
 
 // ================================================================
 // PROVIDER #2 (FALLBACK ONLY — localhost compatibility): Gmail SMTP
+//
+// ** COMMENTED OUT TEMPORARILY — using Brevo only for localhost as well. **
+// To re-enable Gmail fallback:
+//   1. Uncomment the sendViaGmail function below
+//   2. Uncomment the gmail entry inside getEmailProviderStatus.providers
+//   3. Re-add { name: 'gmail-smtp', fn: sendViaGmail } to the providers
+//      array inside the sendEmail() function.
 // ================================================================
+/*
 const sendViaGmail = async (options) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
   const provider = 'gmail-smtp';
@@ -247,6 +429,7 @@ const sendViaGmail = async (options) => {
     }
   }
 };
+*/
 
 // ================================================================
 // Debug: provider status (for /health/email endpoint)
@@ -269,13 +452,17 @@ const getEmailProviderStatus = () => ({
         process.env.SMTP_SECURE === 'true' ||
         String(process.env.SMTP_PORT || '') === '465',
       from: process.env.SMTP_FROM || process.env.SMTP_USER || null,
+      replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_FROM || process.env.SMTP_USER || null,
     },
+    // Gmail SMTP is commented out for now (see sendViaGmail block above)
+    /*
     gmail: {
       configured: Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS),
       user: process.env.EMAIL_USER || null,
     },
+    */
   },
-  priority: ['brevo-smtp', 'gmail-smtp (fallback)'],
+  priority: ['brevo-smtp (primary & only — gmail commented out)'],
   policy: {
     devBannerOnly: getIsDev() ? 'enabled' : 'disabled (production)',
     otpInPinoLogs: getIsDev() ? 'included (local testability)' : 'omitted (privacy)',
@@ -293,9 +480,12 @@ const sendEmail = async (options) => {
   logEmailAttempt(options, 'info', { provider: 'attempt' });
   devConsoleBanner(options, otpHint);
 
+  // Gmail SMTP provider is commented out for now (using Brevo only).
+  // To re-enable Gmail fallback: uncomment the sendViaGmail function
+  // above and add it back to the providers array here.
   const providers = [
     { name: 'brevo-smtp', fn: sendViaBrevoSmtp },
-    { name: 'gmail-smtp', fn: sendViaGmail },
+    // { name: 'gmail-smtp', fn: sendViaGmail },
   ];
 
   const attempts = [];

@@ -20,6 +20,15 @@ const ProtectedRoute = () => {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  if (!user.isVerified) {
+    return (
+      <Navigate
+        to="/verify-otp"
+        replace
+        state={{ email: user.email, reason: 'unverified' }}
+      />
+    );
+  }
   return <Outlet />;
 };
 
@@ -30,6 +39,15 @@ const PublicOnlyRoute = ({ children }) => {
       <div className="min-h-screen flex items-center justify-center">
         <span className="mono text-xs tracking-[0.3em] uppercase text-ink-500">Loading…</span>
       </div>
+    );
+  }
+  if (user && !user.isVerified) {
+    return (
+      <Navigate
+        to="/verify-otp"
+        replace
+        state={{ email: user.email, reason: 'unverified' }}
+      />
     );
   }
   if (user) return <Navigate to="/app/editor" replace />;

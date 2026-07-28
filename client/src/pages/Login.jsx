@@ -121,14 +121,35 @@ const Login = () => {
       if (status === 423 && typeof retryAfter === 'number') {
         setLockSecs(retryAfter);
       }
+      const rawMsg = payload?.message || payload?.error || '';
+      // SECURITY FIX: handle the "Please verify your email first" 401
+      // response the server returns when password is correct but isVerified === false.
+      // Server includes `userId` in the response. Navigate to OTP verify screen
+      // so the user can finish verification instead of being stuck on login.
+      const isUnverified =
+        status === 401 &&
+        /verify.*(email|your)|email.*not.*verified/i.test(rawMsg || '');
+      if (isUnverified) {
+        const navigateUserId = payload?.userId;
+        toast.error(rawMsg);
+        navigate('/verify-otp', {
+          replace: true,
+          state: {
+            email,
+            userId: navigateUserId,
+            reason: 'unverified-login',
+          },
+        });
+        return;
+      }
       const msg =
         status === 423
           ? `Too many attempts. Account locked for ${Math.ceil(retryAfter / 60)} minutes.`
           : status === 401
-          ? payload?.message || payload?.error || 'Email or password didn’t match.'
+          ? rawMsg || 'Email or password didn’t match.'
           : status === 429
           ? 'Too many requests. Slow down and try again.'
-          : payload?.message || payload?.error || 'Something went wrong.';
+          : rawMsg || 'Something went wrong.';
       setGenericErr(msg);
       toast.error(msg);
     } finally {

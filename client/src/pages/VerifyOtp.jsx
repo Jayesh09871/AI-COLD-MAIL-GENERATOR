@@ -70,13 +70,22 @@ const VerifyOtp = () => {
   const { login, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
+  // userId and email come from navigate state (preferred — Signup & Login
+  // unverified redirects pass these), or fall back to AuthContext.user when
+  // the user is mid-flow and has an unverified partial session.
   const startEmail = location.state?.email || user?.email || '';
+  const startUserId = location.state?.userId || user?._id || '';
   const [email] = useState(startEmail);
+  const [userIdFromState] = useState(startUserId);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const inputs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
   const [genericErr, setGenericErr] = useState('');
+
+  // Resolve the active userId — state first, fall back to the
+  // AuthContext user._id for legacy resend flows.
+  const getUserId = () => userIdFromState || user?._id || '';
 
   useEffect(() => {
     setTimeout(() => inputs[0]?.current?.focus(), 50);
@@ -126,11 +135,18 @@ const VerifyOtp = () => {
     try {
       const res = await api.post('/auth/resend-otp', { email });
       const data = res.data?.data || res.data;
-      if (data?.userId && !user?._id) {
+      // SECURITY FIX: only call login() here if we don't already have a
+      // resolved userId, AND only persist the MINIMUM unverified state.
+      // This populates AuthContext with { _id, email, isVerified: false }
+      // so the user can progress, but ProtectedRoute still catches
+      // isVerified === false and redirects BACK to /verify-otp — never Editor.
+      const resolvedUid = getUserId();
+      if (data?.userId && !resolvedUid) {
         login({
           ...(user || {}),
           _id: data.userId,
           email: data.email || email,
+          isVerified: false,
         });
       }
       toast.success('A new code was sent.');
@@ -159,19 +175,20 @@ const VerifyOtp = () => {
       toast.error('Enter all 6 digits.');
       return;
     }
-    if (!user?._id) {
+    const userId = getUserId();
+    if (!userId) {
       toast.error('Missing session — please sign up again, or resend the code to restore it.');
       return;
     }
     setSubmitting(true);
     try {
-      const res = await api.post('/auth/verify-otp', { userId: user._id, otp: code });
+      const res = await api.post('/auth/verify-otp', { userId, otp: code });
       const data = res.data?.data || res.data;
       login({
-        token: data.token || user.token,
-        _id: data._id || user._id,
-        name: data.name || user.name,
-        email: data.email || user.email,
+        token: data.token || user?.token,
+        _id: data._id || userId,
+        name: data.name || user?.name,
+        email: data.email || email,
         isVerified: true,
         lastLoginAt: data.lastLoginAt,
       });
@@ -218,7 +235,14 @@ const VerifyOtp = () => {
 
         <div className="flex-1 flex items-center justify-center px-6 py-12 lg:py-16">
           <div className="w-full max-w-md animate-fade-in">
-            <RouterLink to={user ? '/app/editor' : '/signup'} className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-ink-500 dark:text-ink-400 hover:text-ink-900 dark:hover:text-paper-50 mb-6">
+            {/* SECURITY FIX: Back link must never route to /app/editor for unverified users.
+                Only go to editor if the AuthContext user is explicitly verified; otherwise
+                fall back to /signup for a clean restart (the user already has their OTP
+                on screen so this is a safe, in-flow default). */}
+            <RouterLink
+              to={user?.isVerified ? '/app/editor' : '/signup'}
+              className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-ink-500 dark:text-ink-400 hover:text-ink-900 dark:hover:text-paper-50 mb-6"
+            >
               <ArrowLeft className="w-3.5 h-3.5" />
               Back
             </RouterLink>
