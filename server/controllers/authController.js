@@ -52,17 +52,41 @@ exports.registerUser = async (req, res) => {
     await user.save();
 
     const message = `Your OTP for verification is: ${otp}\n\nThis OTP is valid for 10 minutes.`;
-    sendEmail({ email: user.email, subject: 'Email Verification OTP - SmartReach AI', message }).catch(
-      (error) => logger.warn({ email: user.email, error: error.message }, 'Background OTP email failed')
-    );
 
-    logger.info({ userId: user._id, email: user.email }, 'User registered');
+    // FIX #4: AWAIT sendEmail() and return 500 if email fails to deliver
+    // when any provider is configured — no background fire-and-forget,
+    // no false "OTP sent" confirmation.
+    const emailRes = await sendEmail({
+      email: user.email,
+      subject: 'Email Verification OTP - SmartReach AI',
+      message,
+    });
+    if (!emailRes.success) {
+      logger.warn(
+        { userId: user._id, email: user.email, emailRes },
+        'Registration OTP email failed to deliver — returning 500 to client'
+      );
+      // NOTE: We DO NOT delete the user here. The OTP hash is already stored
+      // and the client can retry via /resend-otp (which also propagates errors).
+      return res.status(500).json({
+        message: 'Failed to send OTP email. Please retry in 30 seconds.',
+        emailError: emailRes.error,
+        userId: user._id,
+        email: user.email,
+      });
+    }
+
+    logger.info(
+      { userId: user._id, email: user.email, deliveredBy: emailRes.deliveredBy || 'skipped-dev' },
+      'User registered (OTP dispatched)'
+    );
     return res.status(201).json({
       message: 'User registered successfully. Please verify OTP sent to your email.',
       _id: user._id,
       userId: user._id,
       name: user.name,
       email: user.email,
+      otpSent: emailRes.delivered === true,
     });
   } catch (error) {
     logger.error({ error: error.message, stack: error.stack }, 'Registration failed');
@@ -207,18 +231,167 @@ exports.resendOtp = async (req, res) => {
     await user.save();
 
     const message = `Your OTP for verification is: ${otp}\n\nThis OTP is valid for 10 minutes.`;
-    sendEmail({ email: user.email, subject: 'Email Verification OTP - SmartReach AI', message }).catch(
-      (error) => logger.warn({ email: user.email, error: error.message }, 'Background OTP email failed')
-    );
 
-    logger.info({ userId: user._id, email: user.email }, 'OTP resent');
+    // FIX #4: AWAIT sendEmail() and return 500 if it fails.
+    const emailRes = await sendEmail({
+      email: user.email,
+      subject: 'Email Verification OTP - SmartReach AI',
+      message,
+    });
+    if (!emailRes.success) {
+      logger.warn(
+        { userId: user._id, email: user.email, emailRes },
+        'Resend-OTP failed to deliver — returning 500'
+      );
+      return res.status(500).json({
+        message: 'Failed to resend OTP email. Please retry in 30 seconds.',
+        emailError: emailRes.error,
+      });
+    }
+
+    logger.info(
+      { userId: user._id, email: user.email, deliveredBy: emailRes.deliveredBy || 'skipped-dev' },
+      'OTP resent'
+    );
     return res.status(200).json({
       message: 'A new verification code has been sent.',
       userId: user._id,
       email: user.email,
+      otpSent: emailRes.delivered === true,
     });
   } catch (error) {
     logger.error({ error: error.message, stack: error.stack }, 'Resend OTP failed');
     return res.status(500).json({ message: 'Failed to resend code' });
+  }
+};
+
+// ================================================================
+// Forgot Password — sends OTP to request a reset
+// ================================================================
+exports.forgotPassword = async (req, res) => {
+  const errorRes = sendValidationResult(req, res);
+  if (errorRes) return errorRes;
+
+  try {
+    const { email } = matchedData(req);
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    // NOTE: Deliberately return a success-shaped response even if the email
+    // doesn't exist so attackers cannot enumerate which emails are
+    // registered. Error only logged server-side.
+    if (!user) {
+      logger.info({ email }, 'Forgot-password request for non-existent email (silent)');
+      return res.status(200).json({
+        message:
+          'If that email is registered, a password-reset OTP has been sent to it.',
+      });
+    }
+
+    // Rate limit: 1 reset OTP per minute per user (account-level throttle,
+    // distinct from the IP-level strictLimiter in routes).
+    if (user.resetOtpExpiry && user.resetOtpExpiry > Date.now() - 60 * 1000) {
+      const remaining = Math.ceil(
+        (60 * 1000 - (Date.now() - (user.resetOtpExpiry.getTime() - 10 * 60 * 1000))) / 1000
+      );
+      return res.status(429).json({
+        message: `Please wait ${remaining}s before requesting a new reset code.`,
+        retryAfterSeconds: remaining,
+      });
+    }
+
+    const otp = generateOTP();
+    await user.setResetOtp(otp);
+    await user.save();
+
+    const message =
+      `Your password reset OTP is: ${otp}\n\n` +
+      `This OTP is valid for 10 minutes and can only be used once.\n` +
+      `If you did not request a password reset, you can safely ignore this email.`;
+
+    const emailRes = await sendEmail({
+      email: user.email,
+      subject: 'Password Reset OTP - SmartReach AI',
+      message,
+    });
+    if (!emailRes.success) {
+      logger.warn(
+        { userId: user._id, email: user.email, emailRes },
+        'Forgot-password OTP email failed to deliver'
+      );
+      return res.status(500).json({
+        message: 'Failed to send password reset OTP email. Please retry in 30 seconds.',
+        emailError: emailRes.error,
+      });
+    }
+
+    logger.info(
+      { userId: user._id, email: user.email, deliveredBy: emailRes.deliveredBy || 'skipped-dev' },
+      'Forgot-password OTP dispatched'
+    );
+    return res.status(200).json({
+      message: 'If that email is registered, a password-reset OTP has been sent to it.',
+      userId: user._id,
+      email: user.email,
+      otpSent: emailRes.delivered === true,
+    });
+  } catch (error) {
+    logger.error({ error: error.message, stack: error.stack }, 'Forgot password failed');
+    return res.status(500).json({ message: 'Failed to process request' });
+  }
+};
+
+// ================================================================
+// Reset Password — verifies OTP + replaces password, logs user in
+// ================================================================
+exports.resetPassword = async (req, res) => {
+  const errorRes = sendValidationResult(req, res);
+  if (errorRes) return errorRes;
+
+  try {
+    const { email, otp, password } = matchedData(req);
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with that email.' });
+    }
+
+    if (!user.resetOtpHash || !user.resetOtpExpiry) {
+      return res.status(400).json({
+        message: 'No password reset request found. Please request a reset code first.',
+      });
+    }
+
+    if (Date.now() > user.resetOtpExpiry.getTime()) {
+      user.clearResetOtp();
+      await user.save();
+      return res.status(400).json({
+        message: 'Reset OTP has expired. Please request a new one.',
+      });
+    }
+
+    const isOtpValid = await user.matchResetOtp(otp);
+    if (!isOtpValid) {
+      logger.warn({ userId: user._id }, 'Invalid reset OTP attempt');
+      return res.status(400).json({ message: 'Invalid OTP. Please try again.' });
+    }
+
+    // Invalidate the reset OTP, set the new password, also unlock account if locked
+    user.clearResetOtp();
+    user.password = password; // pre-save hook hashes this automatically
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = undefined;
+    await user.save();
+
+    logger.info({ userId: user._id, email: user.email }, 'Password reset completed');
+    return res.status(200).json({
+      message: 'Password reset successfully! You may now log in.',
+      token: generateToken(user._id),
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+    });
+  } catch (error) {
+    logger.error({ error: error.message, stack: error.stack }, 'Reset password failed');
+    return res.status(500).json({ message: 'Failed to reset password' });
   }
 };

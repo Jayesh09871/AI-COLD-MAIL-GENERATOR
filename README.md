@@ -20,6 +20,16 @@ npm run install:all
 **2. Setup your Environment Variables**  
 - Create a `.env` in the `/server` folder based on `.env.example`. Make sure your `MONGO_URI` is correctly pointing to your preferred MongoDB instance.  
 - Create a `.env` in the `/client` folder with: `VITE_API_URL=http://localhost:5000/api`
+- **Email (Brevo SMTP):** Sign up for free at [Brevo](https://www.brevo.com/) (300 emails/day forever), then copy the 6 SMTP variables from Brevo → Top-right menu → SMTP & API → SMTP tab into `server/.env`:
+  ```env
+  SMTP_HOST=smtp-relay.brevo.com
+  SMTP_PORT=587
+  SMTP_SECURE=false
+  SMTP_USER=<your Brevo login>
+  SMTP_PASS=<your Brevo master password>
+  SMTP_FROM="SmartReach AI <noreply@your-domain.com>"
+  ```
+  For local-only testing you can also use Gmail SMTP with an App Password (see `.env.example`), but Gmail blocks Render/Heroku/Vercel datacenter IPs so Brevo is **required for live deployments**.
 
 **3. Run the **  
 Start both the Frontend and Backend simultaneously:
@@ -82,7 +92,7 @@ It prevents bad pushes from making it effectively resolving broken dependencies 
    - **Build Command**: `npm install`
    - **Start Command**: `node server.js`  *(Make sure to use node instead of nodemon for production)*
    - **Instance Type**: Free
-6. Under **Environment Variables**, add all the variables from your `.env` file (e.g. `MONGO_URI`, `JWT_SECRET`, `AI_API_KEY`).
+6. Under **Environment Variables**, add all the variables from your `.env` file (e.g. `MONGO_URI`, `JWT_SECRET`, `GROQ_API_KEY`, `FRONTEND_URL`). **To get real OTP emails on live, also add the 6 Brevo SMTP vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`) from `.env.example` — Gmail SMTP will NOT work on Render datacenter IPs.**
 7. Click **Create Web Service**.
 
 ### Deploying Frontend on Vercel
@@ -127,19 +137,35 @@ It prevents bad pushes from making it effectively resolving broken dependencies 
 │ login           │   │ history $text     │   └───────────────────┘
 │ bcrypt + OTP    │   │ PATCH edits       │
 │ rate-limit 5/15 │   │ tags · favorite   │
-└────────┬────────┘   │ status · variants │
-         │            └────────┬──────────┘
+└────────┬────────┘   └────────┬──────────┘
          ▼                     ▼
 ┌──────────────────┐  ┌───────────────────────┐
-│  MongoDB Atlas   │  │  Nodemailer (dev:     │
-│  Mongoose 7.x    │  │   logs OTP to stdout) │
-│  User ·          │  └───────────────────────┘
-│  EmailHistory    │        │
-│  (tone/tags/     │        ▼
-│   favorite/      │  ┌───────────────────────┐
-│   status/        │  │ Groq API              │
-│   variants[])    │  │ llama-3.3-70b         │
-└──────────────────┘  └───────────────────────┘
+│  MongoDB Atlas   │  │  Nodemailer SMTP      │
+│  Mongoose 7.x    │  │  Brevo smtp-relay (1°)│
+│  User ·          │  │  Gmail SMTP (fallback │
+│  EmailHistory    │  │   localhost only)     │
+│  (tone/tags/     │  └───────────────────────┘
+│   favorite/      │          │
+│   status/        │          ▼
+│   variants[])    │  ┌───────────────────────┐
+└──────────────────┘  │ Groq API              │
+                      │ llama-3.3-70b         │
+                      └───────────────────────┘
+```
+
+**OTP / Password Recovery flows (all email-delivered via Brevo SMTP):**
+- Register → email OTP → Verify OTP → Login
+- Resend OTP (with 1 min rate-limit)
+- Forgot Password → email reset OTP → Reset Password (with new password strength checks)
+
+**Auth endpoints:**
+```
+POST  /api/auth/register          (rate-limited strictLimiter)
+POST  /api/auth/verify-otp
+POST  /api/auth/login             (rate-limited authLimiter, lockout after 5)
+POST  /api/auth/resend-otp
+POST  /api/auth/forgot-password
+POST  /api/auth/reset-password
 ```
 
 **Core data model:**

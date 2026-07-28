@@ -1,37 +1,39 @@
 const nodemailer = require('nodemailer');
-const axios = require('axios');
 const logger = require('./logger');
 
 // ================================================================
-// Production-safe OTP / email delivery service.
+// Brevo (Sendinblue) SMTP — single, supported email provider.
 //
-// Design goals (ordered by priority):
-//   1. NEVER block signup because of email failure on a portfolio
-//      deployment. Always log the OTP to hosting logs so the
-//      admin can manually verify. Only throw when the admin
-//      explicitly opts in with EMAIL_REQUIRE_DELIVERY=true.
-//   2. Support multiple providers with a clean priority order so
-//      teams can pick whatever delivers best for them:
-//          a) Resend API         (RECOMMENDED - zero SMTP pain,
-//                                 excellent deliverability, HTTP)
-//          b) Generic SMTP       (SendGrid / Mailgun / Brevo /
-//                                 AWS SES SMTP / Postmark etc)
-//          c) Gmail SMTP         (last resort — Gmail aggressively
-//                                 blocks datacenter IPs)
-//   3. Always-on structured pino logs (otp field + provider status)
-//      in ANY environment so Render/Heroku/CloudWatch/etc logs are
-//      scannable without grepping random [DEV EMAIL] banners.
-//   4. Transient-error retry (1x) for network blips / 429s / 5xx.
-//   5. Expose a status + recent-attempts API so deployers can
-//      diagnose "why aren't emails arriving" without sifting
-//      through logs or running a full signup flow.
+// Migration from Resend:
+//   - Resend HTTP API has been fully removed (no axios used, no
+//     RESEND_API_KEY env var, no sendViaResend codepath).
+//   - All emails go through nodemailer + Brevo SMTP on
+//     smtp-relay.brevo.com:587 with STARTTLS.
+//   - Gmail SMTP is left as a fallback only and is NOT the
+//     supported path; Brevo has superior datacenter-IP deliverability.
+//
+// Error-handling policy:
+//   - If Brevo SMTP credentials are configured (SMTP_HOST/PORT/USER/PASS
+//     are all set), sendEmail RETURNS AN ERROR (throws or returns
+//     { success: false, error: '...' }) if the email can't be
+//     delivered, so register/resend-otp do NOT falsely report success.
+//   - Only if NO provider is configured at all (SMTP vars missing,
+//     Gmail also missing) do we return { success: true, skipped: true }
+//     with OTP logged so a completely-unconfigured local/dev setup
+//     doesn't block signups on the demo/localhost path.
+//
+// Dev console banner policy (per requirement):
+//   - [DEV EMAIL] console banner with the OTP prints ONLY in
+//     NODE_ENV === 'development' (localhost). It NEVER prints in
+//     production, even as a fallback when providers are missing.
+//   - In NODE_ENV === 'production' OTPs are NOT echoed anywhere
+//     except the outgoing email itself — not in stdout, not in
+//     pino logs, not in banners. (In dev we keep the banner +
+//     pino log entry with otp field so the local flow is testable.)
 // ================================================================
 
-// ----- Lazy env helpers (never lock env values at module load) -----
 const getIsDev = () => process.env.NODE_ENV !== 'production';
-const getRequireDelivery = () => process.env.EMAIL_REQUIRE_DELIVERY === 'true';
 
-// ----- Ring buffer for last N delivery attempts (debug endpoint) -----
 const MAX_ATTEMPTS_LOG = 20;
 const recentAttempts = [];
 const pushRecent = (record) => {
@@ -46,7 +48,7 @@ const extractOtpHint = (message) => {
   return m ? m[1] : '';
 };
 
-// ----- Human-friendly dev console banner (LOCALHOST ONLY) -----
+// Dev console banner — LOCALHOST ONLY (isDev). Never prints on Render/vercel/prod.
 const devConsoleBanner = (options, otp) => {
   if (!getIsDev()) return;
   const bar = '========================================';
@@ -58,7 +60,7 @@ const devConsoleBanner = (options, otp) => {
   console.log(`[DEV EMAIL] Subject: ${options.subject}`);
   if (otp) {
     // eslint-disable-next-line no-console
-    console.log(`[DEV EMAIL] OTP: ${otp}  <------- copy this`);
+    console.log(`[DEV EMAIL] OTP: ${otp}  <------- copy this (dev only banner)`);
   }
   // eslint-disable-next-line no-console
   console.log(`[DEV EMAIL] Body:\n${options.message}`);
@@ -66,40 +68,30 @@ const devConsoleBanner = (options, otp) => {
   console.log(`${bar}\n`);
 };
 
+// Structured pino log (runs in all envs, but otp field is dev-only):
+// - In NODE_ENV === 'development' → otp field is set for E2E scraping
+// - In NODE_ENV === 'production'  → otp field is OMITTED (privacy +
+//   no dev fallback per requirements). Users MUST receive OTP via email.
 const logEmailAttempt = (options, status, extras = {}) => {
-  const otpHint = extractOtpHint(options.message);
+  const otpHint = getIsDev() ? extractOtpHint(options.message) : '';
   const level =
     status === 'error' ? 'error' : status === 'warn' ? 'warn' : 'info';
-  logger[level](
-    {
-      to: options.email,
-      subject: options.subject,
-      otp: otpHint || undefined,
-      status,
-      ...extras,
-    },
-    'Email dispatch'
-  );
+  const payload = {
+    to: options.email,
+    subject: options.subject,
+    status,
+    ...extras,
+  };
+  if (otpHint) payload.otp = otpHint;
+  logger[level](payload, 'Email dispatch');
 };
 
-// ----- Transient-error classifier for retry logic -----
-const isTransient = (provider, err) => {
-  const code =
-    err?.status ||
-    err?.response?.status ||
-    err?.code ||
-    err?.responseCode ||
-    0;
-  const msg = (err?.message || err?.error || '').toLowerCase();
-  if (provider === 'resend') {
-    // 429 rate limit, 5xx server errors, axios ECONNRESET/ETIMEDOUT
-    if (code === 429 || (code >= 500 && code < 600)) return true;
-    if (/timeout|econnreset|enetunreach|eai_again/.test(msg)) return true;
-  }
-  if (provider.startsWith('smtp')) {
-    // SMTP 4xx = transient; also socket-level blips
-    if (code >= 400 && code < 500) return true;
-    if (/timeout|econnreset|enetunreach|dns|socket/.test(msg)) return true;
+const isTransient = (err) => {
+  const code = err?.code || err?.responseCode || 0;
+  const msg = (err?.message || '').toLowerCase();
+  if (code >= 400 && code < 500) return true;
+  if (/timeout|econnreset|enetunreach|dns|socket|temporary|try again later/.test(msg)) {
+    return true;
   }
   return false;
 };
@@ -107,80 +99,28 @@ const isTransient = (provider, err) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ================================================================
-// PROVIDER #1: Resend HTTP API (RECOMMENDED — best deliverability)
+// PROVIDER #1 (AND ONLY SUPPORTED ONE): Brevo SMTP
+//   Required env vars: SMTP_HOST=smtp-relay.brevo.com
+//                      SMTP_PORT=587
+//                      SMTP_USER=<Brevo login>
+//                      SMTP_PASS=<Brevo SMTP master password>
+//                      SMTP_FROM=<verified sender, e.g. you@yourdomain.com>
 // ================================================================
-const sendViaResend = async (options) => {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return null;
-  const from = process.env.RESEND_FROM || 'onboarding@resend.dev';
-  const provider = 'resend';
-  const doSend = async () => {
-    const resp = await axios.post(
-      'https://api.resend.com/emails',
-      {
-        from,
-        to: [options.email],
-        subject: options.subject,
-        text: options.message,
-        html: `<p>${options.message.replace(/\n/g, '<br/>')}</p>`,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 15000,
-      }
-    );
-    return {
-      success: true,
-      provider,
-      id: resp.data?.id,
-      status: resp.status,
-    };
-  };
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      return await doSend();
-    } catch (err) {
-      const wrappedErr = {
-        message: err.response?.data?.message || err.message,
-        status: err.response?.status || 0,
-        code: err.code,
-      };
-      if (attempt === 0 && isTransient(provider, wrappedErr)) {
-        logger.warn(
-          { provider, error: wrappedErr, retryAfterMs: 2000 },
-          'Email provider transient failure — retrying'
-        );
-        await sleep(2000);
-        continue;
-      }
-      return {
-        success: false,
-        provider,
-        error: wrappedErr.message,
-        status: wrappedErr.status,
-        code: wrappedErr.code,
-      };
-    }
-  }
-};
-
-// ================================================================
-// PROVIDER #2: Generic SMTP (SendGrid / Mailgun / Brevo / AWS SES)
-// ================================================================
-const sendViaSmtp = async (options) => {
+const sendViaBrevoSmtp = async (options) => {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  if (!host || !port || !user || !pass) return null;
+  if (
+    !host || !port ||
+    !user || !pass ||
+    !String(user).trim() || !String(pass).trim()
+  ) return null;
 
   const secure =
     process.env.SMTP_SECURE === 'true' || String(port) === '465';
   const from = process.env.SMTP_FROM || user;
-  const provider = `smtp:${host}`;
+  const provider = `brevo-smtp:${host}`;
 
   let transporter = null;
   const getTransporter = () => {
@@ -218,16 +158,16 @@ const sendViaSmtp = async (options) => {
     try {
       return await doSend();
     } catch (err) {
-      const wrappedErr = {
+      const wrapped = {
         message: err.message,
         code: err.code,
         responseCode: err.responseCode,
         command: err.command,
       };
-      if (attempt === 0 && isTransient(provider, wrappedErr)) {
+      if (attempt === 0 && isTransient(wrapped)) {
         logger.warn(
-          { provider, error: wrappedErr, retryAfterMs: 2000 },
-          'Email provider transient failure — retrying'
+          { provider, error: wrapped, retryAfterMs: 2000 },
+          'Brevo SMTP transient failure — retrying'
         );
         await sleep(2000);
         continue;
@@ -235,16 +175,16 @@ const sendViaSmtp = async (options) => {
       return {
         success: false,
         provider,
-        error: wrappedErr.message,
-        code: wrappedErr.code,
-        responseCode: wrappedErr.responseCode,
+        error: wrapped.message,
+        code: wrapped.code,
+        responseCode: wrapped.responseCode,
       };
     }
   }
 };
 
 // ================================================================
-// PROVIDER #3: Gmail SMTP (last resort — Google blocks datacenters)
+// PROVIDER #2 (FALLBACK ONLY — localhost compatibility): Gmail SMTP
 // ================================================================
 const sendViaGmail = async (options) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
@@ -284,15 +224,15 @@ const sendViaGmail = async (options) => {
     try {
       return await doSend();
     } catch (err) {
-      const wrappedErr = {
+      const wrapped = {
         message: err.message,
         code: err.code,
         responseCode: err.responseCode,
       };
-      if (attempt === 0 && isTransient(provider, wrappedErr)) {
+      if (attempt === 0 && isTransient(wrapped)) {
         logger.warn(
-          { provider, error: wrappedErr, retryAfterMs: 2000 },
-          'Email provider transient failure — retrying'
+          { provider, error: wrapped, retryAfterMs: 2000 },
+          'Gmail SMTP transient failure — retrying'
         );
         await sleep(2000);
         continue;
@@ -300,31 +240,28 @@ const sendViaGmail = async (options) => {
       return {
         success: false,
         provider,
-        error: wrappedErr.message,
-        code: wrappedErr.code,
-        responseCode: wrappedErr.responseCode,
+        error: wrapped.message,
+        code: wrapped.code,
+        responseCode: wrapped.responseCode,
       };
     }
   }
 };
 
 // ================================================================
-// Provider status (for /health/email debug endpoint)
+// Debug: provider status (for /health/email endpoint)
 // ================================================================
 const getEmailProviderStatus = () => ({
   environment: process.env.NODE_ENV,
-  requireDelivery: getRequireDelivery(),
   providers: {
-    resend: {
-      configured: Boolean(process.env.RESEND_API_KEY),
-      from: process.env.RESEND_FROM || 'onboarding@resend.dev',
-    },
-    smtp: {
+    brevoSmtp: {
       configured: Boolean(
         process.env.SMTP_HOST &&
           process.env.SMTP_PORT &&
           process.env.SMTP_USER &&
-          process.env.SMTP_PASS
+          process.env.SMTP_PASS &&
+          process.env.SMTP_USER.trim() &&
+          process.env.SMTP_PASS.trim()
       ),
       host: process.env.SMTP_HOST || null,
       port: process.env.SMTP_PORT || null,
@@ -338,44 +275,41 @@ const getEmailProviderStatus = () => ({
       user: process.env.EMAIL_USER || null,
     },
   },
-  priority: ['resend', 'smtp', 'gmail'],
-  otpPolicy:
-    getRequireDelivery()
-      ? 'strict (signup fails if email cannot be delivered)'
-      : 'relaxed (OTP logged to hosting logs for manual verification)',
+  priority: ['brevo-smtp', 'gmail-smtp (fallback)'],
+  policy: {
+    devBannerOnly: getIsDev() ? 'enabled' : 'disabled (production)',
+    otpInPinoLogs: getIsDev() ? 'included (local testability)' : 'omitted (privacy)',
+    errorOnDeliveryFailure: 'enabled when any provider is configured — no false success',
+  },
 });
 
 // ================================================================
-// Main send entry point
+// Main entry point
 // ================================================================
 const sendEmail = async (options) => {
   const otpHint = extractOtpHint(options.message);
 
-  logEmailAttempt(options, 'info', {
-    provider: 'attempt',
-    otpSentToDevBanner: getIsDev(),
-  });
+  // Log attempt + dev banner (banner is dev-only gated internally)
+  logEmailAttempt(options, 'info', { provider: 'attempt' });
   devConsoleBanner(options, otpHint);
 
   const providers = [
-    { name: 'resend', fn: sendViaResend },
-    { name: 'smtp', fn: sendViaSmtp },
-    { name: 'gmail', fn: sendViaGmail },
+    { name: 'brevo-smtp', fn: sendViaBrevoSmtp },
+    { name: 'gmail-smtp', fn: sendViaGmail },
   ];
 
   const attempts = [];
   let win = null;
-
   for (const { name, fn } of providers) {
     const r = await fn(options);
-    if (r === null) continue; // not configured
+    if (r === null) continue;
     attempts.push(r);
     if (r.success) {
       win = r;
       break;
     }
     logger.warn(
-      { provider: name, error: r.error, code: r.code || r.status || null },
+      { provider: name, error: r.error, code: r.code || r.responseCode || null },
       `Email provider ${name} failed — moving to next in priority`
     );
   }
@@ -394,61 +328,101 @@ const sendEmail = async (options) => {
       subject: options.subject,
       status: 'delivered',
       provider: win.provider,
-      otp: otpHint || undefined,
     });
-    return { success: true, message: 'Email delivered', attempts, deliveredBy: win.provider };
+    return {
+      success: true,
+      delivered: true,
+      message: 'Email delivered successfully',
+      attempts,
+      deliveredBy: win.provider,
+    };
   }
 
   if (!anyProviderConfigured) {
-    logEmailAttempt(options, 'warn', {
+    // No SMTP configured anywhere. Return a clear skipped response with
+    // OTP only when dev mode (so local dev works). In production, this
+    // branch without any provider is rare but we still return success=false
+    // only when OTP is needed? No — the requirement says:
+    //   "Implement proper error handling so the API returns an error if
+    //    the email fails to send instead of falsely reporting 'OTP sent'."
+    //
+    // Since "no provider configured" means email definitely was NOT sent,
+    // we must NOT return success=true blindly. But also local dev mode
+    // without any provider needs to remain demo-able.
+    //
+    // Resolution:
+    //   • NODE_ENV === 'development' and NO provider configured → keep
+    //     the soft-fallthrough (skipped=true, success=true) because the
+    //     [DEV EMAIL] banner printed the OTP for manual testing.
+    //   • NODE_ENV === 'production' and NO provider configured → return
+    //     success=false with an actionable error so register/verify
+    //     endpoints return a 500 and don't claim "OTP sent".
+    const isDev = getIsDev();
+    const logPayload = {
       delivered: false,
       reason:
-        'No email provider configured (set RESEND_API_KEY or SMTP_HOST+PORT+USER+PASS or EMAIL_USER+EMAIL_PASS to actually send). OTP was logged to hosting logs for manual verification.',
-    });
+        'No email provider configured. Set Brevo SMTP_* env vars (see .env.example) to actually send OTP emails.',
+    };
+    logEmailAttempt(options, isDev ? 'warn' : 'error', logPayload);
     pushRecent({
       to: options.email,
       subject: options.subject,
-      status: 'skipped (no provider configured)',
-      otp: otpHint || undefined,
+      status: isDev ? 'skipped-dev-no-provider' : 'failed-no-provider-configured',
     });
-    if (getRequireDelivery()) {
-      throw new Error(
-        'Failed to send email: no provider configured and EMAIL_REQUIRE_DELIVERY=true'
-      );
+
+    if (isDev) {
+      // Localhost demo path: register still succeeds, user copies OTP
+      // from the dev banner that already printed above.
+      return {
+        success: true,
+        delivered: false,
+        skipped: true,
+        message:
+          'No email provider configured (development mode). OTP was printed to the [DEV EMAIL] banner in the server console for manual testing.',
+        otp: otpHint || undefined,
+        attempts,
+      };
     }
+
+    // PRODUCTION + no provider → MUST NOT falsely report "OTP sent"
     return {
-      success: true,
-      skipped: true,
-      message:
-        'No email provider configured. OTP has been logged to server logs — look for "Email dispatch" with otp=... field.',
-      otp: otpHint || undefined,
+      success: false,
+      delivered: false,
+      skipped: false,
+      error:
+        'No email delivery provider is configured. Please configure Brevo SMTP (SMTP_HOST/PORT/USER/PASS) environment variables.',
       attempts,
     };
   }
 
-  // Providers configured but all failed
+  // At least one provider was configured but all attempts failed.
+  // Regardless of env, we return success=false so auth endpoints
+  // can propagate a clear error to the user instead of claiming
+  // the OTP was emailed when it wasn't.
   logEmailAttempt(options, 'error', { delivered: false, attempts });
   pushRecent({
     to: options.email,
     subject: options.subject,
     status: 'failed',
     providersTried: attempts.map((a) => a.provider),
-    errors: attempts.map((a) => ({ provider: a.provider, error: a.error, code: a.code || a.status || null })),
-    otp: otpHint || undefined,
+    errors: attempts.map((a) => ({
+      provider: a.provider,
+      error: a.error,
+      code: a.code || a.responseCode || null,
+    })),
   });
-  if (getRequireDelivery()) {
-    const lastErr = attempts.filter((a) => !a.success).pop();
-    throw new Error(
-      `Failed to send email: ${lastErr?.error || 'unknown provider error'}`
-    );
-  }
+
+  const lastErr = attempts.filter((a) => !a.success).pop();
+  const msg = lastErr?.error || 'Unknown provider error';
   return {
-    success: true,
-    skipped: true,
-    message: `Email providers failed (${attempts
-      .map((a) => `${a.provider}:${a.error || 'err'}`)
-      .join(', ')}). OTP logged to hosting logs for manual verification.`,
-    otp: otpHint || undefined,
+    success: false,
+    delivered: false,
+    error: `Failed to send email via configured providers. Last error: ${msg}`,
+    providerErrors: attempts.map((a) => ({
+      provider: a.provider,
+      error: a.error,
+      code: a.code || a.responseCode || null,
+    })),
     attempts,
   };
 };
@@ -458,9 +432,9 @@ module.exports.sendEmail = sendEmail;
 module.exports.sendTestEmail = async (toEmail) =>
   sendEmail({
     email: toEmail,
-    subject: 'Test email from SmartReach AI',
+    subject: 'Test email from SmartReach AI (Brevo SMTP)',
     message:
-      'If you received this, your email provider is configured correctly.\n\nThis was sent by the /health/email/test debug endpoint.',
+      'If you received this, your Brevo SMTP credentials are working correctly.\n\nThis was sent by the /health/email/test debug endpoint.',
   });
 module.exports.getEmailProviderStatus = getEmailProviderStatus;
 module.exports.getRecentAttempts = getRecentAttempts;

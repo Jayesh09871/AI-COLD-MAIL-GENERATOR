@@ -1,7 +1,14 @@
 const express = require('express');
 const { body } = require('express-validator');
 const router = express.Router();
-const { registerUser, verifyOTP, loginUser, resendOtp } = require('../controllers/authController');
+const {
+  registerUser,
+  verifyOTP,
+  loginUser,
+  resendOtp,
+  forgotPassword,
+  resetPassword,
+} = require('../controllers/authController');
 const { strictLimiter, authLimiter } = require('../middleware/rateLimit');
 
 const isStrongPassword = (value) => {
@@ -99,6 +106,54 @@ router.post(
       .normalizeEmail({ gmail_remove_dots: false, all_lowercase: true }),
   ],
   resendOtp
+);
+
+// ================================================================
+// Password recovery — OTP-based, same rate-limit tier as OTP routes
+// ================================================================
+router.post(
+  '/forgot-password',
+  strictLimiter,
+  [
+    body('email')
+      .exists({ checkFalsy: true })
+      .withMessage('Email is required')
+      .isEmail()
+      .withMessage('Please provide a valid email address')
+      .normalizeEmail({ gmail_remove_dots: false, all_lowercase: true }),
+  ],
+  forgotPassword
+);
+
+router.post(
+  '/reset-password',
+  strictLimiter,
+  [
+    body('email')
+      .exists({ checkFalsy: true })
+      .withMessage('Email is required')
+      .isEmail()
+      .withMessage('Please provide a valid email address')
+      .normalizeEmail({ gmail_remove_dots: false, all_lowercase: true }),
+    body('otp')
+      .exists({ checkFalsy: true })
+      .withMessage('OTP is required')
+      .isString()
+      .withMessage('OTP must be a string')
+      .trim()
+      .matches(/^\d{6}$/)
+      .withMessage('OTP must be exactly 6 digits'),
+    body('password')
+      .exists({ checkFalsy: true })
+      .withMessage('New password is required')
+      .isString()
+      .withMessage('Password must be a string')
+      .isLength({ min: 8, max: 128 })
+      .withMessage('Password must be between 8 and 128 characters')
+      .custom((value) => isStrongPassword(value))
+      .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number'),
+  ],
+  resetPassword
 );
 
 module.exports = router;

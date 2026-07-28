@@ -17,6 +17,8 @@ const userSchema = new mongoose.Schema(
     isVerified: { type: Boolean, default: false, index: true },
     otpHash: { type: String },
     otpExpiry: { type: Date },
+    resetOtpHash: { type: String },
+    resetOtpExpiry: { type: Date },
     lastLoginAt: { type: Date },
     failedLoginAttempts: { type: Number, default: 0 },
     lockedUntil: { type: Date },
@@ -33,6 +35,10 @@ userSchema.pre('save', async function (next) {
     const salt = await bcrypt.genSalt(10);
     this.otpHash = await bcrypt.hash(this.otpHash, salt);
   }
+  if (this.isModified('resetOtpHash') && this.resetOtpHash && !this.resetOtpHash.startsWith('$2')) {
+    const salt = await bcrypt.genSalt(10);
+    this.resetOtpHash = await bcrypt.hash(this.resetOtpHash, salt);
+  }
   next();
 });
 
@@ -45,6 +51,11 @@ userSchema.methods.matchOtp = async function (enteredOtp) {
   return bcrypt.compare(enteredOtp, this.otpHash);
 };
 
+userSchema.methods.matchResetOtp = async function (enteredOtp) {
+  if (!this.resetOtpHash) return false;
+  return bcrypt.compare(enteredOtp, this.resetOtpHash);
+};
+
 userSchema.methods.setOtp = async function (otp) {
   const salt = await bcrypt.genSalt(10);
   this.otpHash = await bcrypt.hash(otp, salt);
@@ -54,6 +65,17 @@ userSchema.methods.setOtp = async function (otp) {
 userSchema.methods.clearOtp = function () {
   this.otpHash = undefined;
   this.otpExpiry = undefined;
+};
+
+userSchema.methods.setResetOtp = async function (otp) {
+  const salt = await bcrypt.genSalt(10);
+  this.resetOtpHash = await bcrypt.hash(otp, salt);
+  this.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+};
+
+userSchema.methods.clearResetOtp = function () {
+  this.resetOtpHash = undefined;
+  this.resetOtpExpiry = undefined;
 };
 
 const User = mongoose.model('User', userSchema);

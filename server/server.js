@@ -249,15 +249,15 @@ app.get('/health', async (req, res) => {
 });
 
 // ================================================================
-// EMAIL DEBUG ENDPOINTS
+// EMAIL DEBUG ENDPOINTS (Brevo SMTP)
 // -------------------------------------------------------------
-// Use these to diagnose "why aren't OTP emails not arriving" on live
+// Use these to diagnose "why aren't OTP emails arriving" on live
 // without running a full signup flow or sifting Render logs.
 //
 //   GET  /health/email        → Which providers are configured,
 //                              priority order, recent 20 attempts
 //   POST /health/email/test?to=you@example.com
-//                            → Send a test email (rate-limited
+//                            → Send a test email (1/min rate limit)
 // ================================================================
 app.get('/health/email', (_req, res) => {
   try {
@@ -268,7 +268,7 @@ app.get('/health/email', (_req, res) => {
       ...status,
       recentAttempts: recent,
       note:
-        'If all providers show configured:false, use POST /health/email/test?to=<your-email> to send a real test.',
+        'If brevoSmtp.configured=false, set SMTP_HOST/PORT/USER/PASS/FROM env vars. Use POST /health/email/test?to=<your-email> to send a real test.',
     });
   } catch (err) {
     res.status(500).json({ status: 'error', error: err.message });
@@ -305,7 +305,7 @@ app.post('/health/email/test', async (req, res) => {
       to,
       error: err.message,
       hint:
-        'EMAIL_REQUIRE_DELIVERY may be true and all providers failed. Check provider config via GET /health/email.',
+        'Brevo SMTP credentials may be missing or invalid. Check config via GET /health/email and confirm SMTP_HOST/PORT/USER/PASS are set.',
     });
   }
 });
