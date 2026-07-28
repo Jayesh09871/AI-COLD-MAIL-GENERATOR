@@ -27,7 +27,7 @@ npm run install:all
   SMTP_SECURE=false
   SMTP_USER=<your Brevo login>
   SMTP_PASS=<your Brevo master password>
-  SMTP_FROM="SmartReach AI <noreply@your-domain.com>"
+  SMTP_FROM="ColdX <noreply@your-domain.com>"
   ```
   For local-only testing you can also use Gmail SMTP with an App Password (see `.env.example`), but Gmail blocks Render/Heroku/Vercel datacenter IPs so Brevo is **required for live deployments**.
 

@@ -1,16 +1,16 @@
-import { Link as RouterLink } from 'react-router-dom';
 import {
-  ArrowRight,
-  PenLine,
-  Mail,
-  MessageSquare,
-  Repeat2,
-  BookmarkPlus,
-  Search,
-  Sun,
-  Moon,
-  Sparkles,
+    ArrowRight,
+    BookmarkPlus,
+    Mail,
+    MessageSquare,
+    Moon,
+    PenLine,
+    Repeat2,
+    Search,
+    Sparkles,
+    Sun,
 } from 'lucide-react';
+import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -33,7 +33,7 @@ const Logo = ({ compact = false }) => (
       <path d="M8 15h5" />
     </svg>
     <span className={`serif font-semibold tracking-tightest ${compact ? 'text-lg' : 'text-xl'} text-ink-900 dark:text-paper-50`}>
-      Draftwell
+      ColdX
     </span>
   </span>
 );
@@ -113,7 +113,7 @@ const Hero = () => (
           not like a prompt.
         </h1>
         <p className="mt-8 text-lg leading-relaxed text-ink-700 dark:text-ink-300 max-w-xl">
-          Draftwell is a drafting desk for cold emails, LinkedIn messages, and follow-ups.
+          ColdX is a drafting desk for cold emails, LinkedIn messages, and follow-ups.
           Every output is typeset as a document you'd actually sign — because the last thing
           anyone wants to open is another AI-spam sausage.
         </p>
@@ -208,7 +208,7 @@ const Process = () => {
     {
       n: '02',
       h: 'Choose a voice',
-      b: 'Formal, casual, persuasive, or short-and-direct. Draftwell rewrites the system prompt, not just the adjectives.',
+      b: 'Formal, casual, persuasive, or short-and-direct. ColdX rewrites the system prompt, not just the adjectives.',
       icon: <MessageSquare className="w-5 h-5" />,
     },
     {
@@ -267,7 +267,7 @@ const Features = () => {
     },
     {
       h: 'Editable output, always',
-      b: 'Click any paragraph and rewrite it. Draftwell remembers your edits in the saved draft.',
+      b: 'Click any paragraph and rewrite it. ColdX remembers your edits in the saved draft.',
       tag: 'Inline edit',
     },
     {
@@ -301,7 +301,7 @@ const Features = () => {
               Built to look like <em className="italic text-accent-700 dark:text-accent-400">craft</em>.
             </h2>
             <p className="mt-6 leading-relaxed text-ink-700 dark:text-ink-300 max-w-md">
-              If every AI app on your feed is wearing the same outfit, Draftwell is the one
+              If every AI app on your feed is wearing the same outfit, ColdX is the one
               wearing a tailored jacket and reading a real book.
             </p>
             <RouterLink to="/signup" className="mt-10 btn-primary">
@@ -467,7 +467,7 @@ const Footer = () => (
       </div>
       <div className="rule-dashed mt-12 mb-6" />
       <p className="mono text-xs text-ink-500 dark:text-ink-400 tracking-widest uppercase">
-        © {new Date().getFullYear()} Draftwell · Set in Playfair Display and Inter · Made in a text editor, not a prompt.
+        © {new Date().getFullYear()} ColdX · Set in Playfair Display and Inter · Made in a text editor, not a prompt.
       </p>
     </div>
   </footer>

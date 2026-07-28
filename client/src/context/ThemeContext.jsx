@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 
 const ThemeContext = createContext(null);
 
-const STORAGE_KEY = 'draftwell-theme';
+const STORAGE_KEY = 'coldx-theme';
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);

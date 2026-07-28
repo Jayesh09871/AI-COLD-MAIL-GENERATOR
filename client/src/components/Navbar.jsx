@@ -1,6 +1,6 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Menu, Moon, Sun, LogOut } from 'lucide-react';
+import { LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -58,7 +58,7 @@ const Navbar = ({ onMenuClick }) => {
               <path d="M8 15h5" />
             </svg>
             <span className="serif font-semibold tracking-tightest text-xl text-ink-900 dark:text-paper-50">
-              Draftwell
+              ColdX
             </span>
           </NavLink>
 

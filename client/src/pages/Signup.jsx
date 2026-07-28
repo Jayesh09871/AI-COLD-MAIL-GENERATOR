@@ -26,7 +26,7 @@ const LogoMark = () => (
       <path d="M8 15h5" />
     </svg>
     <span className="serif font-semibold tracking-tightest text-xl text-ink-900 dark:text-paper-50">
-      Draftwell
+      ColdX
     </span>
   </span>
 );
@@ -354,7 +354,7 @@ const Signup = () => {
         </div>
 
         <div className="px-6 pb-8 text-center mono text-[10px] tracking-[0.25em] uppercase text-ink-400 dark:text-ink-500">
-          Draftwell · Set in Playfair Display and Inter · MIT licensed
+          ColdX · Set in Playfair Display and Inter · MIT licensed
         </div>
       </div>
     </div>

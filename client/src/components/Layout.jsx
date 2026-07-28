@@ -1,8 +1,8 @@
-import { Outlet } from 'react-router-dom';
-import Sidebar from './Sidebar';
-import Navbar from './Navbar';
-import { useState } from 'react';
 import { Menu } from 'lucide-react';
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import Navbar from './Navbar';
+import Sidebar from './Sidebar';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -41,7 +41,7 @@ const Layout = () => {
               <Menu className="w-4 h-4" />
             </button>
             <span className="serif text-ink-900 dark:text-paper-50 text-lg font-semibold">
-              Draftwell
+              ColdX
             </span>
           </div>
         </div>

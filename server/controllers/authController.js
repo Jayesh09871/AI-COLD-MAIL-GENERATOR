@@ -78,7 +78,7 @@ exports.registerUser = async (req, res) => {
     // no false "OTP sent" confirmation.
     const emailRes = await sendEmail({
       email: user.email,
-      subject: 'Email Verification OTP - SmartReach AI',
+      subject: 'Email Verification OTP - ColdX',
       message,
     });
     if (!emailRes.success) {
@@ -255,7 +255,7 @@ exports.resendOtp = async (req, res) => {
     // FIX #4: AWAIT sendEmail() and return 500 if it fails.
     const emailRes = await sendEmail({
       email: user.email,
-      subject: 'Email Verification OTP - SmartReach AI',
+      subject: 'Email Verification OTP - ColdX',
       message,
     });
     if (!emailRes.success) {
@@ -330,7 +330,7 @@ exports.forgotPassword = async (req, res) => {
 
     const emailRes = await sendEmail({
       email: user.email,
-      subject: 'Password Reset OTP - SmartReach AI',
+      subject: 'Password Reset OTP - ColdX',
       message,
     });
     if (!emailRes.success) {

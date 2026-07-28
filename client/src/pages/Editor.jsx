@@ -358,7 +358,7 @@ const Editor = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       const date = new Date().toISOString().slice(0, 10);
-      const slug = (subject || 'draftwell-draft').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'draft';
+      const slug = (subject || 'coldx-draft').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'draft';
       a.href = url;
       a.download = `${slug}-${date}.${format}`;
       document.body.appendChild(a);
@@ -404,7 +404,7 @@ const Editor = () => {
               )}
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-ink-600 dark:text-ink-400 max-w-xl">
-              Draftwell writes the first take. You make it sound like you.
+              ColdX writes the first take. You make it sound like you.
             </p>
           </div>
 

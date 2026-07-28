@@ -1,27 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
 import {
-  Search,
-  X,
-  BookmarkCheck,
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  FileDown,
-  Trash2,
-  Edit3,
-  Frown,
-  Loader2,
-  Filter,
-  ArchiveRestore,
-  SendHorizonal,
-  ReplyAll,
-  FileTextIcon,
-  Plus,
-  Sparkles,
-  SlidersHorizontal,
+    ArchiveRestore,
+    Bookmark,
+    BookmarkCheck,
+    ChevronLeft,
+    ChevronRight,
+    Edit3,
+    FileDown,
+    FileTextIcon,
+    Filter,
+    Frown,
+    Loader2,
+    Plus,
+    ReplyAll,
+    Search,
+    SendHorizonal,
+    SlidersHorizontal,
+    Sparkles,
+    Trash2,
+    X,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 
 const STATUS_LIST = ['draft', 'sent', 'replied', 'archived'];
@@ -176,7 +176,7 @@ const History = () => {
       const a = document.createElement('a');
       const date = new Date().toISOString().slice(0, 10);
       const v = getPrimaryVariant(entry);
-      const slug = (v?.subject || entry.prompt || 'draftwell-draft')
+      const slug = (v?.subject || entry.prompt || 'coldx-draft')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
@@ -344,7 +344,7 @@ const History = () => {
               </h3>
               <p className="mt-3 text-sm leading-relaxed text-ink-600 dark:text-ink-400">
                 {hasActiveFilters
-                  ? 'Try clearing the filters or a different search. Draftwell saved everything, I promise.'
+                  ? 'Try clearing the filters or a different search. ColdX saved everything, I promise.'
                   : 'Draft something to populate the archive. The first one is the hardest.'}
               </p>
               <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">

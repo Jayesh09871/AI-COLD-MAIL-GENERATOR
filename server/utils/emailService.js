@@ -112,7 +112,7 @@ const buildTransactionalHeaders = (from, to) => {
     ? fromEmailMatch[1]
     : String(from || '').trim();
   const listUnsubscribeMailto = fromEmail
-    ? `mailto:${fromEmail}?subject=Unsubscribe%20from%20SmartReach%20AI`
+    ? `mailto:${fromEmail}?subject=Unsubscribe%20from%20ColdX`
     : '';
   return {
     'Precedence': 'bulk',
@@ -124,8 +124,8 @@ const buildTransactionalHeaders = (from, to) => {
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
       : {}),
     // Brevo-specific tags for categorization in their dashboard
-    'X-Mailer': 'Nodemailer (SmartReach AI)',
-    'X-SmartReach-Type': /OTP|verification|reset|password/i.test(to)
+    'X-Mailer': 'Nodemailer (ColdX)',
+    'X-ColdX-Type': /OTP|verification|reset|password/i.test(to)
       ? 'transactional'
       : 'transactional',
   };
@@ -155,7 +155,7 @@ const extract6DigitCode = (text) => {
 const buildHtmlBody = ({ subject, message }) => {
   const code = extract6DigitCode(message);
   const hasCode = Boolean(code);
-  const safeSubject = escapeHtml(subject || 'SmartReach AI');
+  const safeSubject = escapeHtml(subject || 'ColdX');
   const bodyHtml = textToHtmlInline(message);
   const year = new Date().getFullYear();
 
@@ -203,7 +203,7 @@ const buildHtmlBody = ({ subject, message }) => {
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="color:#FFFFFF; font-family:'Helvetica Neue', Arial, sans-serif; font-size:18px; font-weight:700;">
-                    SmartReach AI
+                    ColdX
                   </td>
                   <td align="right" style="color:#E0E7FF; font-family:'Helvetica Neue', Arial, sans-serif; font-size:12px;">
                     Transactional Email
@@ -231,7 +231,7 @@ const buildHtmlBody = ({ subject, message }) => {
                 ${hasCode ? `
                 <tr>
                   <td style="padding: 4px 0 12px 0; font-size:15px; line-height:1.6; color:#374151; font-family:'Helvetica Neue', Arial, sans-serif;">
-                    Enter this 6-digit code on the SmartReach AI verification screen to confirm your identity. If you did not request this email, you can safely ignore it.
+                    Enter this 6-digit code on the ColdX verification screen to confirm your identity. If you did not request this email, you can safely ignore it.
                   </td>
                 </tr>` : ''}
               </table>
@@ -243,12 +243,12 @@ const buildHtmlBody = ({ subject, message }) => {
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="color:#6B7280; font-family:'Helvetica Neue', Arial, sans-serif; font-size:12px; line-height:1.6;">
-                    &copy; ${year} SmartReach AI. This email was sent in response to an account action (registration, verification, or password reset) initiated by you.
+                    &copy; ${year} ColdX. This email was sent in response to an account action (registration, verification, or password reset) initiated by you.
                   </td>
                 </tr>
                 <tr>
                   <td style="padding-top:8px; color:#9CA3AF; font-family:'Helvetica Neue', Arial, sans-serif; font-size:11px;">
-                    SmartReach AI &middot; AI-powered cold email generator
+                    ColdX &middot; AI-powered cold email generator
                   </td>
                 </tr>
               </table>
@@ -304,7 +304,7 @@ const sendViaBrevoSmtp = async (options) => {
   };
 
   const doSend = async () => {
-    const subject = options.subject || 'SmartReach AI';
+    const subject = options.subject || 'ColdX';
     const textBody = options.message || '';
     const headers = buildTransactionalHeaders(from, subject);
     const htmlBody = options.html || buildHtmlBody({ subject, message: textBody });
@@ -622,7 +622,7 @@ module.exports.sendEmail = sendEmail;
 module.exports.sendTestEmail = async (toEmail) =>
   sendEmail({
     email: toEmail,
-    subject: 'Test email from SmartReach AI (Brevo SMTP)',
+    subject: 'Test email from ColdX (Brevo SMTP)',
     message:
       'If you received this, your Brevo SMTP credentials are working correctly.\n\nThis was sent by the /health/email/test debug endpoint.',
   });

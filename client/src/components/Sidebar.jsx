@@ -71,7 +71,7 @@ const Sidebar = ({ onNavigate }) => {
           <p className="eyebrow !text-accent-700 dark:!text-accent-400">Tip</p>
         </div>
         <p className="mt-2 text-sm leading-relaxed text-ink-700 dark:text-ink-300">
-          Pick a tone first — it rewrites how Draftwell thinks, not just what words it uses.
+          Pick a tone first — it rewrites how ColdX thinks, not just what words it uses.
         </p>
       </div>
 
